@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.log
+*.db
+*.sqlite
+*.sqlite3
+.venv/
+venv/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

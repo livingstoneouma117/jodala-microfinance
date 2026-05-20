@@ -8,7 +8,8 @@ param(
     [string]$Domain = "jodalamicrofinance.co.ke",
     [string]$Region = "frankfurt",
     [string]$Plan = "starter",
-    [int]$DeployWaitMinutes = 25
+    [int]$DeployWaitMinutes = 25,
+    [switch]$NoDisk
 )
 
 $ErrorActionPreference = "Stop"
@@ -107,6 +108,8 @@ $service = $services | Where-Object { $_.name -eq $ServiceName -and $_.ownerId -
 
 if (-not $service) {
     Write-Host "Creating Render web service..."
+    $dbPath = if ($NoDisk) { "/opt/render/project/src/sacco.db" } else { "/var/data/sacco.db" }
+    $diskConfig = if ($NoDisk) { $null } else { @{ name = "data"; mountPath = "/var/data"; sizeGB = 1 } }
     $createBody = @{
         type       = "web_service"
         name       = $ServiceName
@@ -116,7 +119,7 @@ if (-not $service) {
         autoDeploy = "yes"
         envVars    = @(
             @{ key = "DEBUG"; value = "false" },
-            @{ key = "DB_PATH"; value = "/var/data/sacco.db" },
+            @{ key = "DB_PATH"; value = $dbPath },
             @{ key = "JWT_ALGORITHM"; value = "HS256" },
             @{ key = "JWT_EXP_HOURS"; value = "24" },
             @{ key = "SECRET_KEY"; generateValue = $true }
@@ -125,17 +128,15 @@ if (-not $service) {
             runtime = "python"
             plan = $Plan
             region = $Region
-            disk = @{
-                name = "data"
-                mountPath = "/var/data"
-                sizeGB = 1
-            }
             healthCheckPath = "/api/health"
             envSpecificDetails = @{
                 buildCommand = "pip install -r requirements.txt"
-                startCommand = "python -c ""from database import init_db; init_db()"" && gunicorn app:app --bind 0.0.0.0:`$PORT --workers 2 --timeout 120"
+                startCommand = "python app.py"
             }
         }
+    }
+    if ($diskConfig) {
+        $createBody.serviceDetails.disk = $diskConfig
     }
     $service = Invoke-RenderApi -Method "POST" -Path "/services" -Body $createBody
     Write-Host ("Created service: {0} ({1})" -f $service.name, $service.id)
@@ -210,4 +211,3 @@ Write-Host ("CNAME record: www -> {0}" -f $renderHost)
 Write-Host ""
 Write-Host "After DNS propagation, run:"
 Write-Host ("  Invoke-RestMethod -Method POST -Uri ""https://api.render.com/v1/services/{0}/custom-domains/{1}/verify"" -Headers @{{ Authorization = ""Bearer <RENDER_API_KEY>""; Accept = ""application/json"" }}" -f $serviceId, $Domain)
-

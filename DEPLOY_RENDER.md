@@ -5,15 +5,16 @@ This project is now preconfigured for Render with [`render.yaml`](./render.yaml)
 ## What this setup does
 
 - Deploys as a Render **Web Service** (Python runtime).
-- Uses `gunicorn` in production.
-- Initializes SQLite tables at startup before launching Gunicorn.
-- Mounts a persistent disk at `/var/data`.
-- Stores the SQLite file at `/var/data/sacco.db`.
+- Runs the app with `python app.py`.
+- Initializes SQLite tables on startup from your app entrypoint.
+- Stores SQLite at `/opt/render/project/src/sacco.db` on free plan (ephemeral filesystem).
 - Registers custom domain `jodalamicrofinance.co.ke`.
 
 ## Important
 
-- Persistent disks on Render require a **paid** web service plan. This config uses `plan: starter`.
+- This config uses `plan: free` so it can deploy without adding a billing method.
+- On free plan, SQLite data is **not persistent** across restarts/redeploys.
+- To make data persistent later, upgrade to a paid plan and add a disk with `DB_PATH=/var/data/sacco.db`.
 - Keep `SECRET_KEY` private (Render will generate one automatically from `render.yaml`).
 - Root domain currently points to `102.209.117.206`. You will switch DNS to Render during step 6.
 

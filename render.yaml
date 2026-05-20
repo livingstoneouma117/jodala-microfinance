@@ -2,23 +2,19 @@ services:
   - type: web
     runtime: python
     name: jodala-microfinance
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python -c \"from database import init_db; init_db()\" && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+    startCommand: "python app.py"
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     domains:
       - jodalamicrofinance.co.ke
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: DEBUG
         value: "false"
       - key: DB_PATH
-        value: /var/data/sacco.db
+        value: /opt/render/project/src/sacco.db
       - key: JWT_ALGORITHM
         value: HS256
       - key: JWT_EXP_HOURS

@@ -2,19 +2,35 @@ services:
   - type: web
     runtime: python
     name: jodala-microfinance
-    plan: free
+    plan: starter
     region: frankfurt
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python app.py"
     healthCheckPath: /api/health
     autoDeployTrigger: commit
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
     domains:
       - jodalamicrofinance.co.ke
     envVars:
       - key: DEBUG
         value: "false"
       - key: DB_PATH
-        value: /opt/render/project/src/sacco.db
+        value: /var/data/sacco.db
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: BOOTSTRAP_ADMIN
+        value: "true"
+      - key: BOOTSTRAP_ADMIN_NAME
+        value: Jodala Admin
+      - key: BOOTSTRAP_ADMIN_USERNAME
+        sync: false
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
       - key: JWT_ALGORITHM
         value: HS256
       - key: JWT_EXP_HOURS

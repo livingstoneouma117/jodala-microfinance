@@ -10,6 +10,13 @@ DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "sacco.db")
 DB_PATH = os.environ.get("DB_PATH", DEFAULT_DB_PATH)
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -208,8 +215,9 @@ def init_db():
     )""")
 
     conn.commit()
-    _seed_data(conn)
-    _ensure_livow_user(conn)
+    if _env_bool("SEED_DEMO_DATA", False):
+        _seed_data(conn)
+    _ensure_bootstrap_admin(conn)
     conn.close()
     print("Database initialized")
 
@@ -404,29 +412,51 @@ def _seed_data(conn):
     print("Seed data inserted")
 
 
-def _ensure_livow_user(conn):
+def _ensure_bootstrap_admin(conn):
+    if not _env_bool("BOOTSTRAP_ADMIN", True):
+        return
+
     c = conn.cursor()
-    username = "livow"
-    email = "livow@local.sacco"
-    password = hash_password("Lee1234")
+    has_users = c.execute("SELECT 1 FROM users LIMIT 1").fetchone()
+    if has_users:
+        return
 
-    existing = c.execute(
-        "SELECT id FROM users WHERE lower(username)=?",
-        (username,),
-    ).fetchone()
+    username = (
+        os.environ.get("BOOTSTRAP_ADMIN_USERNAME")
+        or os.environ.get("ADMIN_USERNAME")
+        or ""
+    ).strip().lower()
+    password = (
+        os.environ.get("BOOTSTRAP_ADMIN_PASSWORD")
+        or os.environ.get("ADMIN_PASSWORD")
+        or ""
+    )
+    email = (
+        os.environ.get("BOOTSTRAP_ADMIN_EMAIL")
+        or os.environ.get("ADMIN_EMAIL")
+        or ""
+    ).strip().lower()
+    name = (
+        os.environ.get("BOOTSTRAP_ADMIN_NAME")
+        or os.environ.get("ADMIN_NAME")
+        or "Administrator"
+    ).strip() or "Administrator"
+    role = (os.environ.get("BOOTSTRAP_ADMIN_ROLE") or "admin").strip().lower() or "admin"
 
-    if existing:
-        c.execute(
-            "UPDATE users SET name=?, email=?, password=?, role=?, active=1 WHERE id=?",
-            ("Livow", email, password, "admin", existing[0]),
-        )
-    else:
-        c.execute(
-            "INSERT INTO users (name,username,email,password,role,active) VALUES (?,?,?,?,?,1)",
-            ("Livow", username, email, password, "admin"),
-        )
+    if not username or not password:
+        print("Bootstrap admin skipped: set BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD.")
+        return
+
+    if not email:
+        email = f"{username}@local.sacco"
+
+    c.execute(
+        "INSERT INTO users (name,username,email,password,role,active) VALUES (?,?,?,?,?,1)",
+        (name, username, email, hash_password(password), role),
+    )
 
     conn.commit()
+    print(f"Bootstrap admin created: {username}")
 
 
 def _migrate_schema(c):

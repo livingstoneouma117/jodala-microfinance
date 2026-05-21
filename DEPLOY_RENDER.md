@@ -7,14 +7,17 @@ This project is now preconfigured for Render with [`render.yaml`](./render.yaml)
 - Deploys as a Render **Web Service** (Python runtime).
 - Runs the app with `python app.py`.
 - Initializes SQLite tables on startup from your app entrypoint.
-- Stores SQLite at `/opt/render/project/src/sacco.db` on free plan (ephemeral filesystem).
+- Stores SQLite at `/var/data/sacco.db` on a **persistent Render disk**.
 - Registers custom domain `jodalamicrofinance.co.ke`.
 
 ## Important
 
-- This config uses `plan: free` so it can deploy without adding a billing method.
-- On free plan, SQLite data is **not persistent** across restarts/redeploys.
-- To make data persistent later, upgrade to a paid plan and add a disk with `DB_PATH=/var/data/sacco.db`.
+- This config uses `plan: starter` and requires a billing method on Render.
+- Demo seed data is disabled in production (`SEED_DEMO_DATA=false`).
+- You must set bootstrap admin vars in Render env before first run:
+  - `BOOTSTRAP_ADMIN_USERNAME`
+  - `BOOTSTRAP_ADMIN_EMAIL`
+  - `BOOTSTRAP_ADMIN_PASSWORD`
 - Keep `SECRET_KEY` private (Render will generate one automatically from `render.yaml`).
 - Root domain currently points to `102.209.117.206`. You will switch DNS to Render during step 6.
 
@@ -41,6 +44,16 @@ git push -u origin main
 5. Create Blueprint.
 
 Render will build and deploy the web service.
+
+## 2.1) Set bootstrap admin env vars (first-time setup only)
+
+In Render service -> Environment, set:
+
+- `BOOTSTRAP_ADMIN_USERNAME` (example: `admin`)
+- `BOOTSTRAP_ADMIN_EMAIL` (example: `admin@jodalamicrofinance.co.ke`)
+- `BOOTSTRAP_ADMIN_PASSWORD` (strong password you will use to sign in)
+
+On first startup, if the database has no users, the app creates this admin account automatically.
 
 ## 3) Confirm app is up on onrender URL
 

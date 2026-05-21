@@ -1554,7 +1554,7 @@ async function viewLoan(id){
 async function approveLoan(id){
   if(!confirm('Approve this loan application?'))return;
   try{
-    const res=await api(`/loans/${id}/approve`,{method:'POST'});
+    const res=await api(`/loans/${id}/approve`,{method:'POST',body:JSON.stringify({approved_date:today()})});
     if(res?.success){toast(res.message||'Loan approved','success');loadLoans();loadDashboard();}
   }catch(e){toast(e.message,'error')}
 }

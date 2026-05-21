@@ -1171,7 +1171,8 @@ def approve_loan(loan_id):
     if loan["status"] != "pending":
         db.close(); return error("Only pending loans can be approved")
 
-    approved_date = clean_date((request.json or {}).get("approved_date"), date.today().isoformat())
+    payload = request.get_json(silent=True) or {}
+    approved_date = clean_date(payload.get("approved_date"), date.today().isoformat())
     if int(loan["term_months"]) <= 0:
         db.close(); return error("Loan term must be at least 1 month")
     if float(loan["amount"]) <= 0:

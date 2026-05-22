@@ -260,6 +260,29 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
 
 /* ─── Responsive ─────────────────────────────────────────────────────── */
 @media(max-width:768px){
+  #topbar{padding:0 12px;height:54px}
+  .page-title{font-size:14px}
+  .card{padding:14px}
+  .table-wrap{overflow-x:auto}
+  table{min-width:700px}
+  .loans-filters{flex-direction:column;align-items:stretch}
+  .loans-filters .search-wrap{min-width:0!important;width:100%}
+  #loan-status-filter{width:100%!important}
+  .modal-overlay{padding:12px}
+  .modal-header,.modal-body,.modal-footer{padding:14px}
+  .modal-footer{flex-wrap:wrap}
+  .modal-footer .btn{flex:1 1 auto;justify-content:center}
+  .loans-table{min-width:0}
+  .loans-table thead{display:none}
+  .loans-table tbody tr{display:block;margin:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+  .loans-table tbody tr:nth-child(even){background:var(--surface)}
+  .loans-table tbody tr:hover{background:var(--surface)}
+  .loans-table td{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:8px 10px;border-top:1px dashed var(--border);white-space:normal}
+  .loans-table td:first-child{border-top:none}
+  .loans-table td::before{content:attr(data-label);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);flex-shrink:0}
+  .loans-table td.actions-cell{display:block;padding-top:10px}
+  .loans-table td.actions-cell::before{content:'Actions';display:block;margin-bottom:6px}
+  .loans-table td.actions-cell .td-actions{justify-content:flex-start;flex-wrap:wrap}
   .login-shell{grid-template-columns:1fr}.login-panel{display:none}
   #sidebar{position:fixed;left:-230px;top:0;bottom:0;z-index:200;transition:left .25s ease}
   #sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,.5)}
@@ -273,6 +296,11 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
   .modal{max-width:100%!important}
 }
 @media(max-width:480px){
+  #content{padding:12px}
+  .page-header-title{font-size:19px}
+  .page-header{align-items:stretch}
+  #new-loan-btn{width:100%;justify-content:center}
+  #toast-container{left:12px;right:12px;top:10px;max-width:none}
   .grid4,.grid3,.grid2{grid-template-columns:1fr}
   .hide-mobile{display:none!important}
 }
@@ -520,7 +548,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
           <button class="btn btn-primary" id="new-loan-btn" onclick="openLoanModal()"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg> New Application</button>
         </div>
         <div class="card mb4">
-          <div class="flex gap3 flex-wrap">
+          <div class="flex gap3 flex-wrap loans-filters">
             <div class="search-wrap flex-1" style="min-width:200px">
               <svg class="search-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
               <input id="loan-search" class="form-input" placeholder="Search loans, members..." oninput="debouncedLoadLoans()"/>
@@ -537,7 +565,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
           </div>
         </div>
         <div class="table-wrap">
-          <table>
+          <table class="loans-table">
             <thead><tr>
               <th>Loan ID</th><th>Member</th><th>Amount</th>
               <th>Rate / Term</th><th>Loan Date</th><th>Due Date</th><th>Method</th><th>Status</th>
@@ -755,10 +783,11 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
 <div class="modal-overlay" id="loan-modal">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">New Loan Application</span>
+      <span class="modal-title" id="loan-modal-title">New Loan Application</span>
       <button class="btn-icon" onclick="closeModal('loan-modal')"><svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="ln-edit-id"/>
       <div class="grid2 gap4">
         <div class="form-group"><label class="form-label">Member / External Borrower <span class="req">*</span></label><select id="ln-member" class="form-select"></select></div>
         <div class="form-group"><label class="form-label">Purpose</label><input id="ln-purpose" class="form-input" placeholder="Business, Medical..."/></div>
@@ -782,7 +811,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('loan-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitLoan()">Submit Application</button>
+      <button class="btn btn-primary" id="loan-submit-btn" onclick="submitLoan()">Submit Application</button>
     </div>
   </div>
 </div>
@@ -895,6 +924,7 @@ let currentUser = null;
 let activePage  = 'dashboard';
 let membersPage = 1, borrowersPage = 1, loansPage = 1, repayPage = 1, auditPage = 1, savingsPage = 1;
 let loansList = [];
+let loanEditId = '';
 let pendingLoanApplications = [];
 let appSettings = {};
 let pendingLogoImage = null;
@@ -1383,27 +1413,30 @@ async function loadLoans(){
     document.getElementById('loans-sub').textContent=`${total} total loans`;
     const isAdmin=currentUser?.role==='admin';
     const canCreate=['admin','officer'].includes(currentUser?.role);
+    const canEdit=['admin','officer'].includes(currentUser?.role);
     document.getElementById('new-loan-btn').style.display=canCreate?'inline-flex':'none';
 
     document.getElementById('loans-tbody').innerHTML=loans.map(l=>`
       <tr>
-        <td><span class="text-accent font-bold" style="font-family:monospace">${l.id}</span></td>
-        <td><div class="font-bold">${l.member_name}</div><div class="text-xs text-muted">${l.member_phone||''}</div></td>
-        <td class="font-bold">KES ${fmt(l.amount,0)}</td>
-        <td class="text-muted">${l.annual_rate}% / ${l.term_months}mo</td>
-        <td class="text-muted">${fmtSafeD(l.borrowed_date)}</td>
-        <td class="text-muted">${l.next_due_date?fmtSafeD(l.next_due_date):'â€”'}</td>
-        <td><span class="badge badge-inactive" style="font-size:10px">${l.method==='flat'?'Flat':'Reducing'}</span></td>
-        <td>${badge(l.status)}</td>
-        <td>
+        <td data-label="Loan ID"><span class="text-accent font-bold" style="font-family:monospace">${l.id}</span></td>
+        <td data-label="Member"><div class="font-bold">${l.member_name}</div><div class="text-xs text-muted">${l.member_phone||''}</div></td>
+        <td data-label="Amount" class="font-bold">KES ${fmt(l.amount,0)}</td>
+        <td data-label="Rate / Term" class="text-muted">${l.annual_rate}% / ${l.term_months}mo</td>
+        <td data-label="Loan Date" class="text-muted">${fmtSafeD(l.borrowed_date)}</td>
+        <td data-label="Due Date" class="text-muted">${l.next_due_date?fmtSafeD(l.next_due_date):'—'}</td>
+        <td data-label="Method"><span class="badge badge-inactive" style="font-size:10px">${l.method==='flat'?'Flat':'Reducing'}</span></td>
+        <td data-label="Status">${badge(l.status)}</td>
+        <td data-label="Paid">
           <div class="text-green font-bold">KES ${fmt(l.total_paid,0)}</div>
           ${l.penalties>0?`<div class="text-xs text-red">+${fmt(l.penalties,0)} penalty</div>`:''}
         </td>
-        <td>
+        <td data-label="Actions" class="actions-cell">
           <div class="td-actions">
             <button class="btn-icon" title="View Details" onclick="viewLoan('${l.id}')"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
             <button class="btn-icon" title="A5 Statement" onclick="printLoanStatement('${l.id}')">PDF</button>
             <button class="btn-icon" title="Share statement on WhatsApp" onclick="shareLoanStatementWhatsApp('${l.id}')">WA</button>
+            ${canEdit&&l.status==='pending'?`
+              <button class="btn-icon" title="Edit Application" onclick="editLoan('${l.id}')" style="color:var(--amber)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M17.586 3.586a2 2 0 112.828 2.828L12 14.828 8 16l1.172-4 8.414-8.414z"/></svg></button>`:''}
             ${isAdmin&&l.status==='pending'?`
               <button class="btn-icon" title="Approve" onclick="approveLoan('${l.id}')" style="color:var(--green)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></button>
               <button class="btn-icon" title="Reject" onclick="rejectLoan('${l.id}')" style="color:var(--red)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>`:''}
@@ -1417,21 +1450,68 @@ async function loadLoans(){
   }catch(e){toast(e.message,'error')}
 }
 
+async function loadLoanMemberOptions(selectedMemberId=''){
+  const memberRes=await api('/members?type=member&status=active&limit=200');
+  const borrowerRes=await api('/borrowers?status=active&limit=200');
+  const members=memberRes?.data?.members||[];
+  const borrowers=borrowerRes?.data?.borrowers||[];
+  const memberOptions = [
+    members.length?`<optgroup label="Members">${members.map(m=>`<option value="${m.id}">${m.name} (${m.id})</option>`).join('')}</optgroup>`:'',
+    borrowers.length?`<optgroup label="External Borrowers">${borrowers.map(b=>`<option value="${b.id}">${b.name} (${b.id})</option>`).join('')}</optgroup>`:''
+  ].join('');
+  document.getElementById('ln-member').innerHTML=memberOptions;
+  if(selectedMemberId){
+    document.getElementById('ln-member').value=selectedMemberId;
+  }
+}
+
+function setLoanModalMode(isEdit){
+  document.getElementById('loan-modal-title').textContent=isEdit?'Edit Loan Application':'New Loan Application';
+  document.getElementById('loan-submit-btn').textContent=isEdit?'Save Changes':'Submit Application';
+}
+
+function resetLoanForm(){
+  loanEditId='';
+  document.getElementById('ln-edit-id').value='';
+  document.getElementById('ln-date').value=today();
+  document.getElementById('ln-purpose').value='';
+  document.getElementById('ln-amount').value='';
+  document.getElementById('ln-rate').value='18';
+  document.getElementById('ln-term').value='12';
+  document.getElementById('ln-method').value='reducing';
+  document.getElementById('loan-preview').style.display='none';
+}
+
 async function openLoanModal(){
   try{
-    const memberRes=await api('/members?type=member&status=active&limit=200');
-    const borrowerRes=await api('/borrowers?status=active&limit=200');
-    const members=memberRes?.data?.members||[];
-    const borrowers=borrowerRes?.data?.borrowers||[];
-    const memberOptions = [
-      members.length?`<optgroup label="Members">${members.map(m=>`<option value="${m.id}">${m.name} (${m.id})</option>`).join('')}</optgroup>`:'',
-      borrowers.length?`<optgroup label="External Borrowers">${borrowers.map(b=>`<option value="${b.id}">${b.name} (${b.id})</option>`).join('')}</optgroup>`:''
-    ].join('');
-    document.getElementById('ln-member').innerHTML=memberOptions;
-    document.getElementById('ln-date').value=today();
-    document.getElementById('ln-purpose').value='';
-    document.getElementById('ln-amount').value='';
-    document.getElementById('loan-preview').style.display='none';
+    setLoanModalMode(false);
+    resetLoanForm();
+    await loadLoanMemberOptions();
+    openModal('loan-modal');
+  }catch(e){toast(e.message,'error')}
+}
+
+async function editLoan(id){
+  try{
+    const res=await api(`/loans/${id}`);
+    if(!res?.success)return;
+    const loan=res.data?.loan||{};
+    if(loan.status!=='pending'){
+      toast('Only pending loan applications can be edited','error');
+      return;
+    }
+    setLoanModalMode(true);
+    loanEditId=id;
+    document.getElementById('ln-edit-id').value=id;
+    await loadLoanMemberOptions(loan.member_id);
+    document.getElementById('ln-purpose').value=loan.purpose||'';
+    document.getElementById('ln-amount').value=loan.amount||'';
+    document.getElementById('ln-rate').value=loan.annual_rate||'18';
+    document.getElementById('ln-term').value=loan.term_months||'12';
+    document.getElementById('ln-method').value=loan.method||'reducing';
+    document.getElementById('ln-date').value=dateOnly(loan.applied_date||loan.borrowed_date||today());
+    previewLoan();
+    closeModal('loan-detail-modal');
     openModal('loan-modal');
   }catch(e){toast(e.message,'error')}
 }
@@ -1470,6 +1550,8 @@ async function previewLoan(){
 }
 
 async function submitLoan(){
+  const editId=loanEditId||document.getElementById('ln-edit-id').value||'';
+  const isEdit=!!editId;
   const data={member_id:document.getElementById('ln-member').value,
     amount:document.getElementById('ln-amount').value,
     annual_rate:document.getElementById('ln-rate').value,
@@ -1479,8 +1561,12 @@ async function submitLoan(){
     applied_date:document.getElementById('ln-date').value};
   if(!data.member_id||!data.amount||!data.annual_rate||!data.term_months){toast('All required fields must be filled','error');return}
   try{
-    const res=await api('/loans',{method:'POST',body:JSON.stringify(data)});
-    if(res?.success){toast(res.message||`Loan application ${res.data?.id||''} saved`);closeModal('loan-modal');loadLoans();}
+    const res=await api(isEdit?`/loans/${editId}`:'/loans',{method:isEdit?'PUT':'POST',body:JSON.stringify(data)});
+    if(res?.success){
+      toast(res.message||`${isEdit?'Loan application updated':'Loan application submitted'}`);
+      closeModal('loan-modal');
+      loadLoans();
+    }
   }catch(e){toast(e.message,'error')}
 }
 
@@ -1492,7 +1578,8 @@ async function viewLoan(id){
     const paidPct=Math.min(100,Math.round((l.total_paid/(summary.total_repayable||1))*100));
     document.getElementById('loan-detail-title').textContent=`Loan ${id} — ${l.member_name}`;
     document.getElementById('loan-detail-body').innerHTML=`
-      <div class="flex items-center justify-end gap2 mb3">
+      <div class="flex items-center justify-end gap2 mb3 flex-wrap">
+        ${['admin','officer'].includes(currentUser?.role)&&l.status==='pending'?`<button class="btn btn-amber btn-sm" onclick="editLoan('${id}')">Edit Application</button>`:''}
         <button class="btn btn-ghost btn-sm" onclick="printLoanStatement('${id}')">PDF Statement</button>
         <button class="btn btn-primary btn-sm" onclick="shareLoanStatementWhatsApp('${id}')">Share WhatsApp</button>
       </div>

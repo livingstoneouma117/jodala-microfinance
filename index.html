@@ -925,6 +925,7 @@ let activePage  = 'dashboard';
 let membersPage = 1, borrowersPage = 1, loansPage = 1, repayPage = 1, auditPage = 1, savingsPage = 1;
 let loansList = [];
 let loanEditId = '';
+let loanEditStatus = '';
 let pendingLoanApplications = [];
 let appSettings = {};
 let pendingLogoImage = null;
@@ -1414,6 +1415,7 @@ async function loadLoans(){
     const isAdmin=currentUser?.role==='admin';
     const canCreate=['admin','officer'].includes(currentUser?.role);
     const canEdit=['admin','officer'].includes(currentUser?.role);
+    const canDelete=['admin','officer'].includes(currentUser?.role);
     document.getElementById('new-loan-btn').style.display=canCreate?'inline-flex':'none';
 
     document.getElementById('loans-tbody').innerHTML=loans.map(l=>`
@@ -1435,8 +1437,10 @@ async function loadLoans(){
             <button class="btn-icon" title="View Details" onclick="viewLoan('${l.id}')"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
             <button class="btn-icon" title="A5 Statement" onclick="printLoanStatement('${l.id}')">PDF</button>
             <button class="btn-icon" title="Share statement on WhatsApp" onclick="shareLoanStatementWhatsApp('${l.id}')">WA</button>
-            ${canEdit&&l.status==='pending'?`
+            ${canEdit&&['pending','approved','rejected'].includes(l.status)?`
               <button class="btn-icon" title="Edit Application" onclick="editLoan('${l.id}')" style="color:var(--amber)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M17.586 3.586a2 2 0 112.828 2.828L12 14.828 8 16l1.172-4 8.414-8.414z"/></svg></button>`:''}
+            ${canDelete&&['pending','approved','rejected'].includes(l.status)?`
+              <button class="btn-icon" title="Delete Loan" onclick="deleteLoan('${l.id}')" style="color:var(--red)">Del</button>`:''}
             ${isAdmin&&l.status==='pending'?`
               <button class="btn-icon" title="Approve" onclick="approveLoan('${l.id}')" style="color:var(--green)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></button>
               <button class="btn-icon" title="Reject" onclick="rejectLoan('${l.id}')" style="color:var(--red)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>`:''}
@@ -1472,6 +1476,7 @@ function setLoanModalMode(isEdit){
 
 function resetLoanForm(){
   loanEditId='';
+  loanEditStatus='';
   document.getElementById('ln-edit-id').value='';
   document.getElementById('ln-date').value=today();
   document.getElementById('ln-purpose').value='';
@@ -1496,12 +1501,13 @@ async function editLoan(id){
     const res=await api(`/loans/${id}`);
     if(!res?.success)return;
     const loan=res.data?.loan||{};
-    if(loan.status!=='pending'){
-      toast('Only pending loan applications can be edited','error');
+    if(!['pending','approved','rejected'].includes(loan.status)){
+      toast('Only pending, approved, or rejected loans can be edited','error');
       return;
     }
     setLoanModalMode(true);
     loanEditId=id;
+    loanEditStatus=loan.status;
     document.getElementById('ln-edit-id').value=id;
     await loadLoanMemberOptions(loan.member_id);
     document.getElementById('ln-purpose').value=loan.purpose||'';
@@ -1563,9 +1569,16 @@ async function submitLoan(){
   try{
     const res=await api(isEdit?`/loans/${editId}`:'/loans',{method:isEdit?'PUT':'POST',body:JSON.stringify(data)});
     if(res?.success){
-      toast(res.message||`${isEdit?'Loan application updated':'Loan application submitted'}`);
+      if(res.message){
+        toast(res.message);
+      }else if(isEdit&&['approved','rejected'].includes(loanEditStatus)){
+        toast('Loan updated and moved to pending for review');
+      }else{
+        toast(isEdit?'Loan application updated':'Loan application submitted');
+      }
       closeModal('loan-modal');
       loadLoans();
+      loadDashboard();
     }
   }catch(e){toast(e.message,'error')}
 }
@@ -1579,7 +1592,8 @@ async function viewLoan(id){
     document.getElementById('loan-detail-title').textContent=`Loan ${id} — ${l.member_name}`;
     document.getElementById('loan-detail-body').innerHTML=`
       <div class="flex items-center justify-end gap2 mb3 flex-wrap">
-        ${['admin','officer'].includes(currentUser?.role)&&l.status==='pending'?`<button class="btn btn-amber btn-sm" onclick="editLoan('${id}')">Edit Application</button>`:''}
+        ${['admin','officer'].includes(currentUser?.role)&&['pending','approved','rejected'].includes(l.status)?`<button class="btn btn-amber btn-sm" onclick="editLoan('${id}')">Edit Application</button>`:''}
+        ${['admin','officer'].includes(currentUser?.role)&&['pending','approved','rejected'].includes(l.status)?`<button class="btn btn-danger btn-sm" onclick="deleteLoan('${id}')">Delete Loan</button>`:''}
         <button class="btn btn-ghost btn-sm" onclick="printLoanStatement('${id}')">PDF Statement</button>
         <button class="btn btn-primary btn-sm" onclick="shareLoanStatementWhatsApp('${id}')">Share WhatsApp</button>
       </div>
@@ -1661,6 +1675,19 @@ async function rejectLoan(id){
   try{
     const res=await api(`/loans/${id}/reject`,{method:'POST',body:JSON.stringify({reason})});
     if(res?.success){toast('Loan rejected');loadLoans();}
+  }catch(e){toast(e.message,'error')}
+}
+
+async function deleteLoan(id){
+  if(!confirm(`Delete loan ${id}? This cannot be undone.`))return;
+  try{
+    const res=await api(`/loans/${id}`,{method:'DELETE'});
+    if(res?.success){
+      toast(res.message||'Loan deleted');
+      closeModal('loan-detail-modal');
+      loadLoans();
+      loadDashboard();
+    }
   }catch(e){toast(e.message,'error')}
 }
 

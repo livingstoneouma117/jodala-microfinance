@@ -1135,27 +1135,69 @@ def update_loan_application(loan_id):
     loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
     if not loan:
         db.close(); return error("Loan not found", 404)
-    if loan["status"] != "pending":
-        db.close(); return error("Only pending loan applications can be edited")
+    status = (loan.get("status") or "").lower()
+    if status not in {"pending", "approved", "rejected"}:
+        db.close(); return error("Only pending, approved, or rejected loans can be edited")
+    if loan.get("disbursed_date"):
+        db.close(); return error("Disbursed loans cannot be edited")
 
     member = db.execute("SELECT id FROM members WHERE id=? AND status='active'", (d["member_id"],)).fetchone()
     if not member:
         db.close(); return error("Member or external borrower not found or inactive")
 
+    # Editing an approved/rejected loan returns it to pending so it can be reviewed again.
+    new_status = "pending" if status in {"approved", "rejected"} else "pending"
+    approved_date = None if status in {"approved", "rejected"} else loan.get("approved_date")
+    approved_by = None if status in {"approved", "rejected"} else loan.get("approved_by")
+
     db.execute(
         """UPDATE loans
            SET member_id=?, product_id=?, amount=?, annual_rate=?, term_months=?,
-               method=?, purpose=?, applied_date=?, officer_id=?
+               method=?, purpose=?, applied_date=?, officer_id=?, status=?, approved_date=?, approved_by=?
            WHERE id=?""",
         (d["member_id"], d.get("product_id"), float(d["amount"]), float(d["annual_rate"]),
          int(d["term_months"]), d.get("method","reducing"), d.get("purpose"),
-         borrowed_date, g.user["sub"], loan_id)
+         borrowed_date, g.user["sub"], new_status, approved_date, approved_by, loan_id)
     )
     db.commit()
     loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
     db.close()
     audit(f"Updated loan application {loan_id}", "Loans", f"KES {d['amount']} for {d['member_id']}")
+    if status in {"approved", "rejected"}:
+        return success(loan, "Loan updated and moved to pending for review")
     return success(loan, "Loan application updated")
+
+
+@app.route("/api/loans/<loan_id>", methods=["DELETE"])
+@login_required
+@roles_required("admin","officer")
+def delete_loan(loan_id):
+    db = get_db()
+    loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
+    if not loan:
+        db.close(); return error("Loan not found", 404)
+
+    status = (loan.get("status") or "").lower()
+    if status not in {"pending", "approved", "rejected"}:
+        db.close(); return error("Only pending, approved, or rejected loans can be deleted")
+    if loan.get("disbursed_date"):
+        db.close(); return error("Disbursed loans cannot be deleted")
+
+    repayment_count = db.execute(
+        "SELECT COUNT(*) FROM repayments WHERE loan_id=?",
+        (loan_id,),
+    ).fetchone()[0]
+    if repayment_count > 0:
+        db.close(); return error("Loans with repayments cannot be deleted")
+
+    db.execute("DELETE FROM loan_schedule WHERE loan_id=?", (loan_id,))
+    db.execute("DELETE FROM repayments WHERE loan_id=?", (loan_id,))
+    db.execute("DELETE FROM notifications WHERE message LIKE ?", (f"%{loan_id}%",))
+    db.execute("DELETE FROM loans WHERE id=?", (loan_id,))
+    db.commit()
+    db.close()
+    audit(f"Deleted loan {loan_id}", "Loans", f"Status was {status}")
+    return success(msg="Loan deleted")
 
 
 @app.route("/api/loans/<loan_id>/approve", methods=["POST"])

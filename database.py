@@ -188,6 +188,35 @@ def init_db():
         FOREIGN KEY (recorded_by) REFERENCES users(id)
     )""")
 
+    # ── Expense Accounts ─────────────────────────────────────────────────────
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS expense_accounts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        code        TEXT UNIQUE,
+        name        TEXT NOT NULL UNIQUE,
+        description TEXT,
+        active      INTEGER NOT NULL DEFAULT 1,
+        created_by  INTEGER,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    )""")
+
+    # ── Expense Transactions ─────────────────────────────────────────────────
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS expense_transactions (
+        id           TEXT PRIMARY KEY,
+        account_id   INTEGER NOT NULL,
+        amount       REAL NOT NULL CHECK (amount > 0),
+        expense_date TEXT NOT NULL,
+        reference    TEXT,
+        payee        TEXT,
+        notes        TEXT,
+        recorded_by  INTEGER,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (account_id) REFERENCES expense_accounts(id),
+        FOREIGN KEY (recorded_by) REFERENCES users(id)
+    )""")
+
     # ── Notifications ────────────────────────────────────────────────────────
     c.execute("""
     CREATE TABLE IF NOT EXISTS notifications (
@@ -218,6 +247,7 @@ def init_db():
     if _env_bool("SEED_DEMO_DATA", False):
         _seed_data(conn)
     _ensure_bootstrap_admin(conn)
+    _ensure_default_expense_accounts(conn)
     conn.close()
     print("Database initialized")
 
@@ -276,6 +306,18 @@ def _seed_data(conn):
         ("phone", "0712345678"),
     ]
     c.executemany("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", settings)
+
+    # Seed expense accounts
+    expense_accounts = [
+        ("EXP-001", "Office Rent", "Monthly office rent"),
+        ("EXP-002", "Utilities", "Water, electricity, internet"),
+        ("EXP-003", "Transport", "Field visits and transport"),
+        ("EXP-004", "Office Supplies", "Stationery and office consumables"),
+    ]
+    c.executemany(
+        "INSERT OR IGNORE INTO expense_accounts (code,name,description,active,created_by) VALUES (?,?,?,?,?)",
+        [(code, name, desc, 1, 1) for code, name, desc in expense_accounts],
+    )
 
     # Seed savings accounts
     c.executemany(
@@ -457,6 +499,25 @@ def _ensure_bootstrap_admin(conn):
 
     conn.commit()
     print(f"Bootstrap admin created: {username}")
+
+
+def _ensure_default_expense_accounts(conn):
+    c = conn.cursor()
+    has_accounts = c.execute("SELECT 1 FROM expense_accounts LIMIT 1").fetchone()
+    if has_accounts:
+        return
+
+    defaults = [
+        ("EXP-001", "Office Rent", "Monthly office rent"),
+        ("EXP-002", "Utilities", "Water, electricity, internet"),
+        ("EXP-003", "Transport", "Field visits and transport"),
+        ("EXP-004", "Office Supplies", "Stationery and office consumables"),
+    ]
+    c.executemany(
+        "INSERT OR IGNORE INTO expense_accounts (code,name,description,active) VALUES (?,?,?,1)",
+        defaults,
+    )
+    conn.commit()
 
 
 def _migrate_schema(c):

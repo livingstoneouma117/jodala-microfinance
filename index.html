@@ -412,6 +412,10 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
         Savings
       </div>
+      <div class="nav-item" data-page="expenses" onclick="navigate('expenses')">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14l2 2 4-4m1 8H8a2 2 0 01-2-2V6a2 2 0 012-2h5l5 5v9a2 2 0 01-2 2z"/></svg>
+        Expenses
+      </div>
       <div class="nav-item" data-page="repayments" onclick="navigate('repayments')">
         <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
         Repayments
@@ -607,6 +611,53 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         </div>
       </div>
 
+      <!-- ── EXPENSES ─────────────────────────────────────────────── -->
+      <div class="page" id="page-expenses">
+        <div class="page-header">
+          <div><div class="page-header-title">Expenses</div><div class="page-header-sub" id="expense-sub">Track operating costs and account heads</div></div>
+          <button class="btn btn-primary" id="new-expense-btn" onclick="openExpenseModal()"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg> Record Expense</button>
+        </div>
+        <div class="grid3 mb5" id="expense-stats"></div>
+        <div class="card mb5">
+          <div class="flex gap3 flex-wrap">
+            <div class="search-wrap flex-1" style="min-width:200px">
+              <svg class="search-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <input id="expense-search" class="form-input" placeholder="Search reference, payee, notes..." oninput="debouncedLoadExpenses()"/>
+            </div>
+            <select id="expense-account-filter" class="form-select" style="width:auto" onchange="loadExpenses()">
+              <option value="">All Accounts</option>
+            </select>
+            <input id="expense-date-from" type="date" class="form-input" style="width:auto" onchange="loadExpenses()"/>
+            <input id="expense-date-to" type="date" class="form-input" style="width:auto" onchange="loadExpenses()"/>
+          </div>
+          <div class="table-wrap mt3">
+            <table>
+              <thead><tr><th>Ref</th><th>Date</th><th>Account</th><th>Payee</th><th>Amount</th><th>Recorded By</th><th>Actions</th></tr></thead>
+              <tbody id="expense-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="expense-pagination"></div>
+        </div>
+        <div class="card" id="expense-account-card">
+          <div class="flex items-center justify-between mb3">
+            <div class="font-bold">Expense Accounts</div>
+            <div class="text-xs text-muted">Create categories like rent, utilities, transport</div>
+          </div>
+          <div class="grid3 gap3 mb3">
+            <input id="ex-acc-code" class="form-input" placeholder="Code (optional) e.g. EXP-005"/>
+            <input id="ex-acc-name" class="form-input" placeholder="Account name"/>
+            <input id="ex-acc-desc" class="form-input" placeholder="Description (optional)"/>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="createExpenseAccount()">Add Account</button>
+          <div class="table-wrap mt3">
+            <table>
+              <thead><tr><th>Code</th><th>Account</th><th>Description</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="expense-accounts-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- ── REPAYMENTS ─────────────────────────────────────────────── -->
       <div class="page" id="page-repayments">
         <div class="page-header">
@@ -637,6 +688,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
             <button class="btn btn-ghost btn-sm" onclick="exportReport('loans')">↓ Loans CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportReport('repayments')">↓ Repayments CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportReport('savings')">↓ Savings CSV</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('expenses')">↓ Expenses CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportReport('members')">↓ Members CSV</button>
           </div>
         </div>
@@ -887,6 +939,30 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
   </div>
 </div>
 
+<!-- Expense Modal -->
+<div class="modal-overlay" id="expense-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Record Expense</span>
+      <button class="btn-icon" onclick="closeModal('expense-modal')"><svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="flex flex-col gap4">
+        <div class="form-group"><label class="form-label">Expense Account <span class="req">*</span></label><select id="ex-account" class="form-select"><option value="">— Select Account —</option></select></div>
+        <div class="form-group"><label class="form-label">Amount (KES) <span class="req">*</span></label><input id="ex-amount" type="number" class="form-input" min="1" step="0.01" placeholder="1500"/></div>
+        <div class="form-group"><label class="form-label">Expense Date</label><input id="ex-date" type="date" class="form-input"/></div>
+        <div class="form-group"><label class="form-label">Payee</label><input id="ex-payee" class="form-input" placeholder="Paid to (optional)"/></div>
+        <div class="form-group"><label class="form-label">Reference</label><input id="ex-ref" class="form-input" placeholder="Optional"/></div>
+        <div class="form-group"><label class="form-label">Notes</label><textarea id="ex-notes" class="form-textarea" placeholder="Short description"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('expense-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitExpense()">Record Expense</button>
+    </div>
+  </div>
+</div>
+
 <!-- User Modal -->
 <div class="modal-overlay" id="user-modal">
   <div class="modal">
@@ -922,11 +998,12 @@ const API = '/api';
 let token = null;
 let currentUser = null;
 let activePage  = 'dashboard';
-let membersPage = 1, borrowersPage = 1, loansPage = 1, repayPage = 1, auditPage = 1, savingsPage = 1;
+let membersPage = 1, borrowersPage = 1, loansPage = 1, repayPage = 1, auditPage = 1, savingsPage = 1, expensesPage = 1;
 let loansList = [];
 let loanEditId = '';
 let loanEditStatus = '';
 let pendingLoanApplications = [];
+let expenseAccounts = [];
 let appSettings = {};
 let pendingLogoImage = null;
 
@@ -1075,7 +1152,7 @@ function tryAutoLogin(){
 
 // ── Navigation ───────────────────────────────────────────────────────────────
 const PAGE_TITLES = {dashboard:'Dashboard',members:'Members',borrowers:'External Borrowers',loans:'Loans',savings:'Savings',
-  repayments:'Repayments',reports:'Reports',notifications:'Notifications',audit:'Audit Log',users:'User Management',settings:'Settings'};
+  expenses:'Expenses',repayments:'Repayments',reports:'Reports',notifications:'Notifications',audit:'Audit Log',users:'User Management',settings:'Settings'};
 
 function navigate(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1089,7 +1166,7 @@ function navigate(page){
   const loaders={
     dashboard:loadDashboard, members:loadMembers, borrowers:loadBorrowers, loans:loadLoans,
     savings:()=>{loadSavingsCards();loadSavingsTxns()},
-    repayments:loadRepayments, reports:loadReports,
+    expenses:loadExpenses, repayments:loadRepayments, reports:loadReports,
     notifications:loadNotifications, audit:loadAuditLogs, users:loadUsers, settings:loadSettings
   };
   loaders[page]?.();
@@ -1831,6 +1908,188 @@ async function submitSavings(){
       closeModal('savings-modal');
       loadSavingsCards();
       loadSavingsTxns();
+    }
+  }catch(e){toast(e.message,'error')}
+}
+
+// ── EXPENSES ─────────────────────────────────────────────────────────────────
+const debouncedLoadExpenses = debounce(()=>{expensesPage=1;loadExpenses()});
+
+function canManageExpenses(){
+  return ['admin','accountant'].includes(currentUser?.role);
+}
+
+function renderExpenseAccountSelectors(accounts){
+  const filter=document.getElementById('expense-account-filter');
+  const modalSelect=document.getElementById('ex-account');
+  const currentFilter=filter?.value||'';
+
+  if(filter){
+    filter.innerHTML='<option value="">All Accounts</option>'+accounts.map(a=>
+      `<option value="${a.id}">${a.code?`${a.code} - `:''}${a.name}${a.active?'':' (inactive)'}</option>`
+    ).join('');
+    if(currentFilter && [...filter.options].some(o=>o.value===currentFilter)) filter.value=currentFilter;
+  }
+
+  if(modalSelect){
+    const activeAccounts=accounts.filter(a=>Number(a.active)===1);
+    modalSelect.innerHTML='<option value="">— Select Account —</option>'+activeAccounts.map(a=>
+      `<option value="${a.id}">${a.code?`${a.code} - `:''}${a.name}</option>`
+    ).join('');
+  }
+}
+
+function renderExpenseAccountTable(accounts){
+  const canManage=canManageExpenses();
+  const tbody=document.getElementById('expense-accounts-tbody');
+  if(!tbody)return;
+  tbody.innerHTML=accounts.map(a=>`
+    <tr>
+      <td class="text-muted">${a.code||'—'}</td>
+      <td class="font-bold">${a.name}</td>
+      <td class="text-muted">${a.description||'—'}</td>
+      <td>${Number(a.active)===1?'<span class="text-green">Active</span>':'<span class="text-red">Inactive</span>'}</td>
+      <td>
+        ${canManage?`<button class="btn btn-ghost btn-sm" onclick="toggleExpenseAccountStatus(${a.id},${Number(a.active)===1?0:1})">${Number(a.active)===1?'Deactivate':'Activate'}</button>`:'—'}
+      </td>
+    </tr>
+  `).join('')||'<tr><td colspan="5"><div class="empty-state"><div class="empty-msg">No expense accounts found</div></div></td></tr>';
+}
+
+async function loadExpenses(){
+  const canManage=canManageExpenses();
+  const newBtn=document.getElementById('new-expense-btn');
+  const accCard=document.getElementById('expense-account-card');
+  if(newBtn)newBtn.style.display=canManage?'inline-flex':'none';
+  if(accCard)accCard.style.display=canManage?'block':'none';
+
+  try{
+    const accountsRes=await api(`/expenses/accounts?include_inactive=${canManage?'true':'false'}`);
+    if(!accountsRes?.success)return;
+    expenseAccounts=accountsRes.data||[];
+    renderExpenseAccountSelectors(expenseAccounts);
+    renderExpenseAccountTable(expenseAccounts);
+
+    const q=document.getElementById('expense-search')?.value||'';
+    const accountId=document.getElementById('expense-account-filter')?.value||'';
+    const dateFrom=document.getElementById('expense-date-from')?.value||'';
+    const dateTo=document.getElementById('expense-date-to')?.value||'';
+
+    let url=`/expenses/transactions?page=${expensesPage}&limit=10`;
+    if(q)url+=`&q=${encodeURIComponent(q)}`;
+    if(accountId)url+=`&account_id=${encodeURIComponent(accountId)}`;
+    if(dateFrom)url+=`&date_from=${encodeURIComponent(dateFrom)}`;
+    if(dateTo)url+=`&date_to=${encodeURIComponent(dateTo)}`;
+
+    const txRes=await api(url);
+    if(!txRes?.success)return;
+    const {transactions,total,pages,total_amount}=txRes.data;
+    document.getElementById('expense-sub').textContent=`${total} expense transactions`;
+    const activeCount=expenseAccounts.filter(a=>Number(a.active)===1).length;
+
+    document.getElementById('expense-stats').innerHTML=`
+      <div class="card-sm"><div class="text-xs text-muted mb1">Total Expenses</div><div class="text-xl font-bold text-red">KES ${fmt(total_amount||0,0)}</div></div>
+      <div class="card-sm"><div class="text-xs text-muted mb1">Transactions</div><div class="text-xl font-bold">${total||0}</div></div>
+      <div class="card-sm"><div class="text-xs text-muted mb1">Active Accounts</div><div class="text-xl font-bold text-accent2">${activeCount}</div></div>`;
+
+    document.getElementById('expense-tbody').innerHTML=transactions.map(t=>`
+      <tr>
+        <td class="text-muted" style="font-family:monospace">${t.reference||t.id}</td>
+        <td>${fmtSafeD(t.expense_date)}</td>
+        <td><div class="font-bold">${t.account_name}</div><div class="text-xs text-muted">${t.account_code||''}</div></td>
+        <td>${t.payee||'—'}</td>
+        <td class="text-red font-bold">KES ${fmt(t.amount,0)}</td>
+        <td class="text-muted text-xs">${t.recorded_by_name||'—'}</td>
+        <td>
+          <div class="td-actions">
+            ${canManage?`<button class="btn-icon" style="color:var(--red)" title="Delete Expense" onclick="deleteExpense('${t.id}')">Delete</button>`:'—'}
+          </div>
+        </td>
+      </tr>
+    `).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-msg">No expenses found</div></div></td></tr>';
+
+    renderPagination('expense-pagination',pages||1,expensesPage,p=>{expensesPage=p;loadExpenses()});
+  }catch(e){toast(e.message,'error')}
+}
+
+async function openExpenseModal(){
+  if(!canManageExpenses()){toast('Insufficient permissions','error');return}
+  if(!expenseAccounts.length){
+    const res=await api('/expenses/accounts?include_inactive=true');
+    if(res?.success)expenseAccounts=res.data||[];
+  }
+  renderExpenseAccountSelectors(expenseAccounts);
+  document.getElementById('ex-amount').value='';
+  document.getElementById('ex-date').value=today();
+  document.getElementById('ex-payee').value='';
+  document.getElementById('ex-ref').value='';
+  document.getElementById('ex-notes').value='';
+  openModal('expense-modal');
+}
+
+async function submitExpense(){
+  if(!canManageExpenses()){toast('Insufficient permissions','error');return}
+  const data={
+    account_id:document.getElementById('ex-account').value,
+    amount:document.getElementById('ex-amount').value,
+    expense_date:document.getElementById('ex-date').value,
+    payee:document.getElementById('ex-payee').value||undefined,
+    reference:document.getElementById('ex-ref').value||undefined,
+    notes:document.getElementById('ex-notes').value||undefined
+  };
+  if(!data.account_id||!data.amount){toast('Account and amount are required','error');return}
+  try{
+    const res=await api('/expenses/transactions',{method:'POST',body:JSON.stringify(data)});
+    if(res?.success){
+      toast(res.message||'Expense recorded');
+      closeModal('expense-modal');
+      expensesPage=1;
+      loadExpenses();
+      loadDashboard();
+    }
+  }catch(e){toast(e.message,'error')}
+}
+
+async function createExpenseAccount(){
+  if(!canManageExpenses()){toast('Insufficient permissions','error');return}
+  const data={
+    code:document.getElementById('ex-acc-code').value||undefined,
+    name:document.getElementById('ex-acc-name').value,
+    description:document.getElementById('ex-acc-desc').value||undefined
+  };
+  if(!data.name){toast('Account name is required','error');return}
+  try{
+    const res=await api('/expenses/accounts',{method:'POST',body:JSON.stringify(data)});
+    if(res?.success){
+      toast(res.message||'Expense account created');
+      document.getElementById('ex-acc-code').value='';
+      document.getElementById('ex-acc-name').value='';
+      document.getElementById('ex-acc-desc').value='';
+      loadExpenses();
+    }
+  }catch(e){toast(e.message,'error')}
+}
+
+async function toggleExpenseAccountStatus(accountId, active){
+  if(!canManageExpenses()){toast('Insufficient permissions','error');return}
+  try{
+    const res=await api(`/expenses/accounts/${accountId}/status`,{method:'PATCH',body:JSON.stringify({active:!!active})});
+    if(res?.success){
+      toast(active?'Expense account activated':'Expense account deactivated');
+      loadExpenses();
+    }
+  }catch(e){toast(e.message,'error')}
+}
+
+async function deleteExpense(id){
+  if(!canManageExpenses()){toast('Insufficient permissions','error');return}
+  if(!confirm('Delete this expense transaction?'))return;
+  try{
+    const res=await api(`/expenses/transactions/${id}`,{method:'DELETE'});
+    if(res?.success){
+      toast(res.message||'Expense deleted');
+      loadExpenses();
+      loadDashboard();
     }
   }catch(e){toast(e.message,'error')}
 }

@@ -73,6 +73,125 @@ def get_settings_dict():
     settings.update({r["key"]: r["value"] for r in rows})
     return settings
 
+def get_account_opening_balance(db) -> float:
+    opening_balance_row = db.execute(
+        "SELECT value FROM app_settings WHERE key='account_opening_balance'"
+    ).fetchone()
+    try:
+        return float((opening_balance_row["value"] if opening_balance_row else 0) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+def build_monthly_account_report(db) -> dict:
+    monthly_raw = rows_to_list(db.execute(
+        """
+        SELECT month,
+               COALESCE(SUM(savings_collections),0) AS savings_collections,
+               COALESCE(SUM(loan_repayments),0) AS loan_repayments,
+               COALESCE(SUM(expenses),0) AS expenses
+        FROM (
+            SELECT strftime('%Y-%m', txn_date) AS month,
+                   amount AS savings_collections,
+                   0 AS loan_repayments,
+                   0 AS expenses
+            FROM savings_transactions
+            WHERE type='deposit'
+
+            UNION ALL
+
+            SELECT strftime('%Y-%m', payment_date) AS month,
+                   0 AS savings_collections,
+                   amount AS loan_repayments,
+                   0 AS expenses
+            FROM repayments
+
+            UNION ALL
+
+            SELECT strftime('%Y-%m', expense_date) AS month,
+                   0 AS savings_collections,
+                   0 AS loan_repayments,
+                   amount AS expenses
+            FROM expense_transactions
+        )
+        WHERE month IS NOT NULL AND month != ''
+        GROUP BY month
+        ORDER BY month ASC
+        """
+    ).fetchall())
+
+    opening_balance = get_account_opening_balance(db)
+    if not monthly_raw:
+        return {
+            "opening_balance": opening_balance,
+            "closing_balance": opening_balance,
+            "months": [],
+            "totals": {
+                "savings_collections": 0.0,
+                "loan_repayments": 0.0,
+                "inflow": 0.0,
+                "expenses": 0.0,
+                "net": 0.0,
+            },
+        }
+
+    by_month = {r["month"]: r for r in monthly_raw if r.get("month")}
+    month_keys = sorted(by_month.keys())
+    start_month = datetime.strptime(f"{month_keys[0]}-01", "%Y-%m-%d").date()
+    end_month = datetime.strptime(f"{month_keys[-1]}-01", "%Y-%m-%d").date()
+
+    def next_month(d: date) -> date:
+        if d.month == 12:
+            return date(d.year + 1, 1, 1)
+        return date(d.year, d.month + 1, 1)
+
+    rows = []
+    running_balance = opening_balance
+    totals = {
+        "savings_collections": 0.0,
+        "loan_repayments": 0.0,
+        "inflow": 0.0,
+        "expenses": 0.0,
+        "net": 0.0,
+    }
+    cursor = start_month
+    while cursor <= end_month:
+        month_key = cursor.strftime("%Y-%m")
+        source = by_month.get(month_key, {})
+        savings_collections = float(source.get("savings_collections") or 0)
+        loan_repayments = float(source.get("loan_repayments") or 0)
+        expenses = float(source.get("expenses") or 0)
+        inflow = savings_collections + loan_repayments
+        net = inflow - expenses
+        opening = running_balance
+        closing = opening + net
+
+        rows.append({
+            "month": month_key,
+            "opening_balance": opening,
+            "savings_collections": savings_collections,
+            "loan_repayments": loan_repayments,
+            "inflow": inflow,
+            "expenses": expenses,
+            "net": net,
+            "closing_balance": closing,
+        })
+
+        totals["savings_collections"] += savings_collections
+        totals["loan_repayments"] += loan_repayments
+        totals["inflow"] += inflow
+        totals["expenses"] += expenses
+        totals["net"] += net
+
+        running_balance = closing
+        cursor = next_month(cursor)
+
+    return {
+        "opening_balance": opening_balance,
+        "closing_balance": running_balance,
+        "months": rows,
+        "totals": totals,
+    }
+
 def pdf_escape(value) -> str:
     return str(value).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
@@ -581,16 +700,13 @@ def dashboard():
     total_repaid   = db.execute("SELECT COALESCE(SUM(amount),0) FROM repayments").fetchone()[0]
     total_penalties= db.execute("SELECT COALESCE(SUM(penalties),0) FROM loans").fetchone()[0]
     total_expenses = db.execute("SELECT COALESCE(SUM(amount),0) FROM expense_transactions").fetchone()[0]
-    opening_balance_row = db.execute(
-        "SELECT value FROM app_settings WHERE key='account_opening_balance'"
-    ).fetchone()
-    try:
-        account_opening_balance = float((opening_balance_row["value"] if opening_balance_row else 0) or 0)
-    except (TypeError, ValueError):
-        account_opening_balance = 0.0
-    account_total_inflow = float(total_repaid or 0)
-    account_total_outflow = float(total_disbursed or 0) + float(total_expenses or 0)
-    account_current_balance = account_opening_balance + account_total_inflow - account_total_outflow
+    account_report = build_monthly_account_report(db)
+    account_opening_balance = float(account_report["opening_balance"] or 0)
+    account_savings_collections = float(account_report["totals"]["savings_collections"] or 0)
+    account_loan_repayments = float(account_report["totals"]["loan_repayments"] or 0)
+    account_total_inflow = float(account_report["totals"]["inflow"] or 0)
+    account_total_outflow = float(account_report["totals"]["expenses"] or 0)
+    account_current_balance = float(account_report["closing_balance"] or 0)
     portfolio = db.execute("""
         SELECT
           COALESCE(SUM(total_repayable),0) AS total_repayable,
@@ -670,6 +786,8 @@ def dashboard():
             "total_penalties": total_penalties,
             "total_expenses":  total_expenses,
             "account_opening_balance": account_opening_balance,
+            "account_savings_collections": account_savings_collections,
+            "account_loan_repayments": account_loan_repayments,
             "account_total_inflow": account_total_inflow,
             "account_total_outflow": account_total_outflow,
             "account_current_balance": account_current_balance,
@@ -1815,6 +1933,15 @@ def report_savings():
     return success(rows)
 
 
+@app.route("/api/reports/account-monthly", methods=["GET"])
+@login_required
+def report_account_monthly():
+    db = get_db()
+    data = build_monthly_account_report(db)
+    db.close()
+    return success(data)
+
+
 @app.route("/api/reports/export/<report_type>", methods=["GET"])
 @login_required
 def export_report(report_type):
@@ -1856,6 +1983,20 @@ def export_report(report_type):
                ORDER BY et.expense_date DESC, et.created_at DESC"""
         ).fetchall()
         for r in rows: writer.writerow(list(r))
+    elif report_type == "account-monthly":
+        writer.writerow(["Month","Opening Balance","Savings Collections","Loan Repayments","Total Inflow","Expenses","Net Movement","Closing Balance"])
+        data = build_monthly_account_report(db)
+        for row in data.get("months", []):
+            writer.writerow([
+                row.get("month"),
+                row.get("opening_balance"),
+                row.get("savings_collections"),
+                row.get("loan_repayments"),
+                row.get("inflow"),
+                row.get("expenses"),
+                row.get("net"),
+                row.get("closing_balance"),
+            ])
     elif report_type == "members":
         writer.writerow(["ID","Name","Phone","Email","National ID","Status","Joined","Savings"])
         rows = db.execute("SELECT id,name,phone,email,national_id,status,joined_date,savings FROM members WHERE member_type='member'").fetchall()

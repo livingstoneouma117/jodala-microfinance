@@ -689,10 +689,21 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
             <button class="btn btn-ghost btn-sm" onclick="exportReport('repayments')">↓ Repayments CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportReport('savings')">↓ Savings CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportReport('expenses')">↓ Expenses CSV</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('account-monthly')">↓ Account Monthly CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportReport('members')">↓ Members CSV</button>
           </div>
         </div>
         <div class="grid4 mb5" id="report-kpis"></div>
+        <div class="card mb5">
+          <div class="font-bold mb3">Monthly Account Report</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Month</th><th>Opening</th><th>Savings Collected</th><th>Loan Repaid</th><th>Inflow</th><th>Expenses</th><th>Net</th><th>Closing</th></tr></thead>
+              <tbody id="report-account-monthly-tbody"></tbody>
+              <tfoot><tr id="report-account-monthly-totals"></tr></tfoot>
+            </table>
+          </div>
+        </div>
         <div class="card mb5">
           <div class="font-bold mb3">Loan Portfolio</div>
           <div class="table-wrap">
@@ -1042,6 +1053,11 @@ const fmtAuditTime = value => {
     hour12:false
   });
 };
+const fmtMonthLabel = monthKey => {
+  if(!monthKey)return '—';
+  const dt=new Date(`${monthKey}-01T00:00:00`);
+  return Number.isNaN(dt.getTime()) ? monthKey : dt.toLocaleDateString('en-KE',{month:'short',year:'numeric'});
+};
 const dash = v => (v === undefined || v === null || v === '') ? '—' : v;
 const today= () => new Date().toISOString().split('T')[0];
 
@@ -1201,7 +1217,7 @@ function renderDashStats(s){
     {
       label:'Main Account Balance',
       value:`KES ${fmt(s.account_current_balance||0,0)}`,
-      sub:`Opening KES ${fmt(s.account_opening_balance||0,0)} · Inflow KES ${fmt(s.account_total_inflow||0,0)} · Outflow KES ${fmt(s.account_total_outflow||0,0)}`,
+      sub:`Opening KES ${fmt(s.account_opening_balance||0,0)} · Savings KES ${fmt(s.account_savings_collections||0,0)} + Repaid Loans KES ${fmt(s.account_loan_repayments||0,0)} - Expenses KES ${fmt(s.account_total_outflow||0,0)}`,
       icon:'🏧',
       cls:'stat-cyan'
     },
@@ -2188,7 +2204,11 @@ async function submitRepayment(){
 // ── REPORTS ──────────────────────────────────────────────────────────────────
 async function loadReports(){
   try{
-    const [port,sav]=await Promise.all([api('/reports/portfolio'),api('/reports/savings')]);
+    const [port,sav,accountMonthly]=await Promise.all([
+      api('/reports/portfolio'),
+      api('/reports/savings'),
+      api('/reports/account-monthly')
+    ]);
     if(!port?.success||!sav?.success)return;
 
     const {loans,totals}=port.data;
@@ -2225,7 +2245,7 @@ async function loadReports(){
       <td></td>
       <td class="font-bold text-red">KES ${fmt(t.total_penalties,0)}</td>`;
 
-    const savRows=sav.data;
+    const savRows=sav.data||[];
     document.getElementById('report-savings-tbody').innerHTML=savRows.map(m=>`
       <tr>
         <td class="font-bold">${m.name}</td>
@@ -2234,7 +2254,42 @@ async function loadReports(){
         <td class="text-red">KES ${fmt(m.total_withdrawals||0,0)}</td>
         <td>${badge(m.status)}</td>
       </tr>`).join('');
+
+    renderAccountMonthlyReport(accountMonthly?.success ? accountMonthly.data : null);
   }catch(e){toast(e.message,'error')}
+}
+
+function renderAccountMonthlyReport(data){
+  const tbody=document.getElementById('report-account-monthly-tbody');
+  const tfoot=document.getElementById('report-account-monthly-totals');
+  if(!tbody||!tfoot)return;
+  const rows=data?.months||[];
+  const totals=data?.totals||{};
+  const opening=Number(data?.opening_balance||0);
+  const closing=Number(data?.closing_balance||opening);
+
+  tbody.innerHTML=rows.map(r=>`
+    <tr>
+      <td class="font-bold">${fmtMonthLabel(r.month)}</td>
+      <td>KES ${fmt(r.opening_balance||0,0)}</td>
+      <td class="text-green">KES ${fmt(r.savings_collections||0,0)}</td>
+      <td class="text-green">KES ${fmt(r.loan_repayments||0,0)}</td>
+      <td class="text-green font-bold">KES ${fmt(r.inflow||0,0)}</td>
+      <td class="text-red">KES ${fmt(r.expenses||0,0)}</td>
+      <td class="${Number(r.net||0)>=0?'text-green':'text-red'} font-bold">${Number(r.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(r.net||0)),0)}</td>
+      <td class="font-bold">KES ${fmt(r.closing_balance||0,0)}</td>
+    </tr>
+  `).join('')||'<tr><td colspan="8"><div class="empty-state"><div class="empty-msg">No monthly account activity yet</div></div></td></tr>';
+
+  tfoot.innerHTML=`
+    <td class="font-bold">TOTALS (${rows.length} months)</td>
+    <td class="font-bold">KES ${fmt(opening,0)}</td>
+    <td class="font-bold text-green">KES ${fmt(totals.savings_collections||0,0)}</td>
+    <td class="font-bold text-green">KES ${fmt(totals.loan_repayments||0,0)}</td>
+    <td class="font-bold text-green">KES ${fmt(totals.inflow||0,0)}</td>
+    <td class="font-bold text-red">KES ${fmt(totals.expenses||0,0)}</td>
+    <td class="font-bold ${Number(totals.net||0)>=0?'text-green':'text-red'}">${Number(totals.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(totals.net||0)),0)}</td>
+    <td class="font-bold">KES ${fmt(closing,0)}</td>`;
 }
 
 function exportReport(type){

@@ -23,21 +23,37 @@ def build_schedule(loan_id: str, principal: float, annual_rate: float,
     """
     start = datetime.strptime(start_date, "%Y-%m-%d").date()
     schedule = []
-    balance  = principal
-    monthly_rate = annual_rate / 100
-    monthly_interest = principal * monthly_rate
+    if term_months <= 0:
+        return schedule
+
+    balance  = float(principal)
+    monthly_rate = float(annual_rate) / 100
+
+    # Keep legacy flat-interest behavior, but guarantee exact totals/rounding.
+    monthly_interest = principal * monthly_rate if monthly_rate > 0 else 0.0
     total_interest = monthly_interest * term_months
     total_repayable = principal + total_interest
-    principal_part = principal / term_months
-    interest_part = monthly_interest
-    monthly_repayment = total_repayable / term_months
+
+    principal_base = round(principal / term_months, 2)
+    interest_base = round(total_interest / term_months, 2) if total_interest > 0 else 0.0
+    principal_alloc = 0.0
+    interest_alloc = 0.0
 
     for i in range(1, term_months + 1):
         due_date = _add_months(start, i)
 
-        interest      = interest_part
-        principal_pay = principal_part
-        balance       = max(0, balance - principal_pay)
+        if i < term_months:
+            principal_pay = principal_base
+            interest = interest_base
+        else:
+            # Last installment absorbs rounding remainder so totals stay exact.
+            principal_pay = round(principal - principal_alloc, 2)
+            interest = round(total_interest - interest_alloc, 2)
+
+        principal_alloc += principal_pay
+        interest_alloc += interest
+        repayment = round(principal_pay + interest, 2)
+        balance = round(max(0.0, principal - principal_alloc), 2)
 
         schedule.append({
             "loan_id":     loan_id,
@@ -45,7 +61,7 @@ def build_schedule(loan_id: str, principal: float, annual_rate: float,
             "due_date":    due_date.strftime("%Y-%m-%d"),
             "principal":   round(principal_pay, 2),
             "interest":    round(interest, 2),
-            "repayment":   round(monthly_repayment, 2),
+            "repayment":   repayment,
             "balance":     round(balance, 2),
         })
 

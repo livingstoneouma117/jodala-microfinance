@@ -791,6 +791,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
             <div class="form-group">
               <label class="form-label">Main Account Opening Balance (KES)</label>
               <input id="set-opening-balance" class="form-input" type="number" min="0" step="0.01" placeholder="0"/>
+              <div class="form-hint">This value auto-updates when loans are disbursed, repayments/savings are received, and expenses are recorded.</div>
             </div>
             <div class="form-group">
               <label class="form-label">Add to Main Account (KES)</label>
@@ -1224,7 +1225,7 @@ function renderDashStats(s){
     {
       label:'Main Account Balance',
       value:`KES ${fmt(s.account_current_balance||0,0)}`,
-      sub:`Opening KES ${fmt(s.account_opening_balance||0,0)} · Savings KES ${fmt(s.account_savings_collections||0,0)} + Repaid Loans KES ${fmt(s.account_loan_repayments||0,0)} - Disbursed KES ${fmt(s.account_loan_disbursed||0,0)} - Expenses KES ${fmt(s.account_expenses||0,0)}`,
+      sub:`Opening/Current KES ${fmt(s.account_opening_balance||0,0)} · Lifetime Inflow KES ${fmt(s.account_total_inflow||0,0)} · Lifetime Outflow KES ${fmt(s.account_total_outflow||0,0)}`,
       icon:'🏧',
       cls:'stat-cyan'
     },

@@ -82,6 +82,19 @@ def get_account_opening_balance(db) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+def set_account_opening_balance(db, value: float) -> float:
+    new_value = float(value or 0)
+    db.execute(
+        "INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,datetime('now')) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')",
+        ("account_opening_balance", str(new_value)),
+    )
+    return new_value
+
+def adjust_account_opening_balance(db, delta: float) -> float:
+    current = get_account_opening_balance(db)
+    return set_account_opening_balance(db, current + float(delta or 0))
+
 def build_monthly_account_report(db) -> dict:
     monthly_raw = rows_to_list(db.execute(
         """
@@ -133,11 +146,11 @@ def build_monthly_account_report(db) -> dict:
         """
     ).fetchall())
 
-    opening_balance = get_account_opening_balance(db)
+    current_balance = get_account_opening_balance(db)
     if not monthly_raw:
         return {
-            "opening_balance": opening_balance,
-            "closing_balance": opening_balance,
+            "opening_balance": current_balance,
+            "closing_balance": current_balance,
             "months": [],
             "totals": {
                 "savings_collections": 0.0,
@@ -151,6 +164,15 @@ def build_monthly_account_report(db) -> dict:
         }
 
     by_month = {r["month"]: r for r in monthly_raw if r.get("month")}
+    overall_net = 0.0
+    for row in by_month.values():
+        savings = float(row.get("savings_collections") or 0)
+        repaid = float(row.get("loan_repayments") or 0)
+        disbursed = float(row.get("loan_disbursed") or 0)
+        expenses = float(row.get("expenses") or 0)
+        overall_net += (savings + repaid) - (disbursed + expenses)
+
+    opening_balance = current_balance - overall_net
     month_keys = sorted(by_month.keys())
     start_month = datetime.strptime(f"{month_keys[0]}-01", "%Y-%m-%d").date()
     end_month = datetime.strptime(f"{month_keys[-1]}-01", "%Y-%m-%d").date()
@@ -725,14 +747,14 @@ def dashboard():
     total_penalties= db.execute("SELECT COALESCE(SUM(penalties),0) FROM loans").fetchone()[0]
     total_expenses = db.execute("SELECT COALESCE(SUM(amount),0) FROM expense_transactions").fetchone()[0]
     account_report = build_monthly_account_report(db)
-    account_opening_balance = float(account_report["opening_balance"] or 0)
+    account_opening_balance = get_account_opening_balance(db)
     account_savings_collections = float(account_report["totals"]["savings_collections"] or 0)
     account_loan_repayments = float(account_report["totals"]["loan_repayments"] or 0)
     account_loan_disbursed = float(account_report["totals"]["loan_disbursed"] or 0)
     account_expenses = float(account_report["totals"]["expenses"] or 0)
     account_total_inflow = float(account_report["totals"]["inflow"] or 0)
     account_total_outflow = float(account_report["totals"]["outflow"] or 0)
-    account_current_balance = float(account_report["closing_balance"] or 0)
+    account_current_balance = account_opening_balance
     portfolio = db.execute("""
         SELECT
           COALESCE(SUM(total_repayable),0) AS total_repayable,
@@ -1251,6 +1273,8 @@ def create_loan():
                 new_status = "completed"
             db.execute("UPDATE loans SET status=? WHERE id=?", (new_status, loan["id"]))
             loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan["id"],)).fetchone())
+            # Top-up on an active/overdue loan represents new funds released.
+            adjust_account_opening_balance(db, -added_amount)
 
         db.commit()
         db.close()
@@ -1418,6 +1442,7 @@ def disburse_loan(loan_id):
         "UPDATE loans SET status='active', disbursed_date=?, notes=COALESCE(NULLIF(?,''),notes) WHERE id=?",
         (disbursed_date, d.get("reference") or d.get("notes") or "", loan_id)
     )
+    adjust_account_opening_balance(db, -float(loan["amount"] or 0))
     loan_for_schedule = {**loan, "status": "active", "disbursed_date": disbursed_date}
     rebuild_loan_schedule(db, loan_for_schedule, disbursed_date)
     db.execute(
@@ -1534,6 +1559,7 @@ def create_repayment():
         (rid, loan["id"], loan["member_id"], amount, d["payment_date"],
          method, ref, d.get("type","installment"), g.user["sub"])
     )
+    adjust_account_opening_balance(db, amount)
 
     allocate_repayment_to_schedule(db, loan["id"], d["payment_date"])
 
@@ -1621,6 +1647,7 @@ def savings_deposit():
         (tid, d["member_id"], "deposit", amount, d.get("category","voluntary"),
          d.get("date", date.today().isoformat()), ref, new_balance, g.user["sub"])
     )
+    adjust_account_opening_balance(db, amount)
     db.commit()
     db.close()
     audit(f"Recorded deposit {tid}", "Savings", f"KES {amount} for {d['member_id']}")
@@ -1842,6 +1869,7 @@ def create_expense_transaction():
            VALUES (?,?,?,?,?,?,?,?)""",
         (eid, int(d["account_id"]), amount, expense_date, reference, payee or None, notes or None, g.user["sub"])
     )
+    adjust_account_opening_balance(db, -amount)
     db.commit()
     row = row_to_dict(db.execute(
         """SELECT et.*, ea.name as account_name, ea.code as account_code
@@ -2263,12 +2291,7 @@ def add_main_account_funds():
 
     db = get_db()
     current_opening = get_account_opening_balance(db)
-    new_opening = current_opening + amount
-    db.execute(
-        "INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,datetime('now')) "
-        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')",
-        ("account_opening_balance", str(new_opening))
-    )
+    new_opening = set_account_opening_balance(db, current_opening + amount)
     db.commit()
     db.close()
 

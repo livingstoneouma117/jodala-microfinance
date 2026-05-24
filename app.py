@@ -2249,6 +2249,37 @@ def update_settings():
     audit("Updated application settings", "Settings")
     return success(get_settings_dict(), "Settings saved")
 
+
+@app.route("/api/settings/account/add", methods=["POST"])
+@roles_required("admin", "accountant")
+def add_main_account_funds():
+    d = request.json or {}
+    try:
+        amount = float(d.get("amount") or 0)
+    except (TypeError, ValueError):
+        return error("Amount must be a valid number")
+    if amount <= 0:
+        return error("Amount must be greater than zero")
+
+    db = get_db()
+    current_opening = get_account_opening_balance(db)
+    new_opening = current_opening + amount
+    db.execute(
+        "INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,datetime('now')) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')",
+        ("account_opening_balance", str(new_opening))
+    )
+    db.commit()
+    db.close()
+
+    audit("Added funds to main account", "Settings", f"KES {amount:,.2f}")
+    settings = get_settings_dict()
+    return success({
+        "added_amount": amount,
+        "account_opening_balance": float(settings.get("account_opening_balance") or 0),
+        "settings": settings,
+    }, "Main account updated")
+
 # ══════════════════════════════════════════════════════════════════════════════
 # LOAN CALCULATOR (public — no auth)
 # ══════════════════════════════════════════════════════════════════════════════

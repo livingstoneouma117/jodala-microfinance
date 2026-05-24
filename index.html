@@ -792,6 +792,13 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
               <label class="form-label">Main Account Opening Balance (KES)</label>
               <input id="set-opening-balance" class="form-input" type="number" min="0" step="0.01" placeholder="0"/>
             </div>
+            <div class="form-group">
+              <label class="form-label">Add to Main Account (KES)</label>
+              <div class="flex gap2">
+                <input id="set-opening-topup" class="form-input" type="number" min="0" step="0.01" placeholder="Amount to add"/>
+                <button class="btn btn-ghost" type="button" onclick="addMainAccountFunds()">Add</button>
+              </div>
+            </div>
           </div>
           <div class="form-group mt3"><label class="form-label">Address</label><input id="set-address" class="form-input" placeholder="Physical address"/></div>
           <div class="modal-footer" style="padding-left:0;padding-right:0;margin-top:16px">
@@ -2535,6 +2542,25 @@ async function saveSettings(){
   try{
     const res=await api('/settings',{method:'PUT',body:JSON.stringify(data)});
     if(res?.success){appSettings=res.data;applySettings();toast('Settings saved');}
+  }catch(e){toast(e.message,'error')}
+}
+
+async function addMainAccountFunds(){
+  const input=document.getElementById('set-opening-topup');
+  const amount=Number(input?.value||0);
+  if(!(amount>0)){toast('Enter amount greater than 0','error');return}
+  try{
+    const res=await api('/settings/account/add',{method:'POST',body:JSON.stringify({amount})});
+    if(res?.success){
+      appSettings=res.data?.settings||appSettings;
+      if(document.getElementById('set-opening-balance')){
+        document.getElementById('set-opening-balance').value=appSettings.account_opening_balance||'0';
+      }
+      if(input)input.value='';
+      applySettings();
+      toast(`Main account increased by KES ${fmt(amount,0)}`);
+      if(activePage==='dashboard')loadDashboard();
+    }
   }catch(e){toast(e.message,'error')}
 }
 

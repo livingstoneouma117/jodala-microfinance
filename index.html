@@ -1624,7 +1624,7 @@ async function editLoan(id){
     await loadLoanMemberOptions(loan.member_id);
     document.getElementById('ln-purpose').value=loan.purpose||'';
     document.getElementById('ln-amount').value=loan.amount||'';
-    document.getElementById('ln-rate').value=loan.annual_rate||'18';
+    document.getElementById('ln-rate').value=(loan.annual_rate ?? '18');
     document.getElementById('ln-term').value=loan.term_months||'12';
     document.getElementById('ln-method').value=loan.method||'reducing';
     document.getElementById('ln-date').value=dateOnly(loan.applied_date||loan.borrowed_date||today());
@@ -1642,7 +1642,7 @@ function selectExistingLoan(){
   document.getElementById('ln-member').value=loan.member_id;
   document.getElementById('ln-purpose').value=loan.purpose||'';
   document.getElementById('ln-amount').value=loan.amount||'';
-  document.getElementById('ln-rate').value=loan.annual_rate||'';
+  document.getElementById('ln-rate').value=(loan.annual_rate ?? '');
   document.getElementById('ln-term').value=loan.term_months||'';
   document.getElementById('ln-method').value=loan.method||'flat';
   document.getElementById('ln-date').value=loan.applied_date||today();
@@ -1654,7 +1654,7 @@ async function previewLoan(){
   const rate=Number(document.getElementById('ln-rate').value);
   const term=Number(document.getElementById('ln-term').value);
   const method=document.getElementById('ln-method').value;
-  if(!amt||!rate||!term)return;
+  if(!(amt>0) || !(rate>=0) || !(term>0))return;
   try{
     const res=await api('/calculate',{method:'POST',body:JSON.stringify({amount:amt,annual_rate:rate,term_months:term,method})});
     if(res?.success){

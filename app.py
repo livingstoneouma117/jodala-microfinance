@@ -1663,6 +1663,8 @@ def savings_withdraw():
         return error("member_id and amount required")
 
     amount = float(d["amount"])
+    if amount <= 0:
+        return error("Amount must be positive")
     db     = get_db()
     member = row_to_dict(db.execute("SELECT * FROM members WHERE id=?", (d["member_id"],)).fetchone())
     if not member:
@@ -1681,6 +1683,7 @@ def savings_withdraw():
         (tid, d["member_id"], "withdrawal", amount, d.get("category","voluntary"),
          d.get("date", date.today().isoformat()), ref, new_balance, g.user["sub"])
     )
+    adjust_account_opening_balance(db, -amount)
     db.commit(); db.close()
     audit(f"Recorded withdrawal {tid}", "Savings", f"KES {amount} for {d['member_id']}")
     return success({"reference": ref, "new_balance": new_balance}, "Withdrawal processed", 201)

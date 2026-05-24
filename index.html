@@ -698,7 +698,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
           <div class="font-bold mb3">Monthly Account Report</div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Month</th><th>Opening</th><th>Savings Collected</th><th>Loan Repaid</th><th>Inflow</th><th>Expenses</th><th>Net</th><th>Closing</th></tr></thead>
+              <thead><tr><th>Month</th><th>Opening</th><th>Savings Collected</th><th>Loan Repaid</th><th>Inflow</th><th>Loans Disbursed</th><th>Expenses</th><th>Outflow</th><th>Net</th><th>Closing</th></tr></thead>
               <tbody id="report-account-monthly-tbody"></tbody>
               <tfoot><tr id="report-account-monthly-totals"></tr></tfoot>
             </table>
@@ -1217,7 +1217,7 @@ function renderDashStats(s){
     {
       label:'Main Account Balance',
       value:`KES ${fmt(s.account_current_balance||0,0)}`,
-      sub:`Opening KES ${fmt(s.account_opening_balance||0,0)} · Savings KES ${fmt(s.account_savings_collections||0,0)} + Repaid Loans KES ${fmt(s.account_loan_repayments||0,0)} - Expenses KES ${fmt(s.account_total_outflow||0,0)}`,
+      sub:`Opening KES ${fmt(s.account_opening_balance||0,0)} · Savings KES ${fmt(s.account_savings_collections||0,0)} + Repaid Loans KES ${fmt(s.account_loan_repayments||0,0)} - Disbursed KES ${fmt(s.account_loan_disbursed||0,0)} - Expenses KES ${fmt(s.account_expenses||0,0)}`,
       icon:'🏧',
       cls:'stat-cyan'
     },
@@ -2275,11 +2275,13 @@ function renderAccountMonthlyReport(data){
       <td class="text-green">KES ${fmt(r.savings_collections||0,0)}</td>
       <td class="text-green">KES ${fmt(r.loan_repayments||0,0)}</td>
       <td class="text-green font-bold">KES ${fmt(r.inflow||0,0)}</td>
+      <td class="text-red">KES ${fmt(r.loan_disbursed||0,0)}</td>
       <td class="text-red">KES ${fmt(r.expenses||0,0)}</td>
+      <td class="text-red font-bold">KES ${fmt(r.outflow||0,0)}</td>
       <td class="${Number(r.net||0)>=0?'text-green':'text-red'} font-bold">${Number(r.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(r.net||0)),0)}</td>
       <td class="font-bold">KES ${fmt(r.closing_balance||0,0)}</td>
     </tr>
-  `).join('')||'<tr><td colspan="8"><div class="empty-state"><div class="empty-msg">No monthly account activity yet</div></div></td></tr>';
+  `).join('')||'<tr><td colspan="10"><div class="empty-state"><div class="empty-msg">No monthly account activity yet</div></div></td></tr>';
 
   tfoot.innerHTML=`
     <td class="font-bold">TOTALS (${rows.length} months)</td>
@@ -2287,7 +2289,9 @@ function renderAccountMonthlyReport(data){
     <td class="font-bold text-green">KES ${fmt(totals.savings_collections||0,0)}</td>
     <td class="font-bold text-green">KES ${fmt(totals.loan_repayments||0,0)}</td>
     <td class="font-bold text-green">KES ${fmt(totals.inflow||0,0)}</td>
+    <td class="font-bold text-red">KES ${fmt(totals.loan_disbursed||0,0)}</td>
     <td class="font-bold text-red">KES ${fmt(totals.expenses||0,0)}</td>
+    <td class="font-bold text-red">KES ${fmt(totals.outflow||0,0)}</td>
     <td class="font-bold ${Number(totals.net||0)>=0?'text-green':'text-red'}">${Number(totals.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(totals.net||0)),0)}</td>
     <td class="font-bold">KES ${fmt(closing,0)}</td>`;
 }

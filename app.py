@@ -88,11 +88,13 @@ def build_monthly_account_report(db) -> dict:
         SELECT month,
                COALESCE(SUM(savings_collections),0) AS savings_collections,
                COALESCE(SUM(loan_repayments),0) AS loan_repayments,
+               COALESCE(SUM(loan_disbursed),0) AS loan_disbursed,
                COALESCE(SUM(expenses),0) AS expenses
         FROM (
             SELECT strftime('%Y-%m', txn_date) AS month,
                    amount AS savings_collections,
                    0 AS loan_repayments,
+                   0 AS loan_disbursed,
                    0 AS expenses
             FROM savings_transactions
             WHERE type='deposit'
@@ -102,14 +104,26 @@ def build_monthly_account_report(db) -> dict:
             SELECT strftime('%Y-%m', payment_date) AS month,
                    0 AS savings_collections,
                    amount AS loan_repayments,
+                   0 AS loan_disbursed,
                    0 AS expenses
             FROM repayments
+
+            UNION ALL
+
+            SELECT strftime('%Y-%m', disbursed_date) AS month,
+                   0 AS savings_collections,
+                   0 AS loan_repayments,
+                   amount AS loan_disbursed,
+                   0 AS expenses
+            FROM loans
+            WHERE disbursed_date IS NOT NULL
 
             UNION ALL
 
             SELECT strftime('%Y-%m', expense_date) AS month,
                    0 AS savings_collections,
                    0 AS loan_repayments,
+                   0 AS loan_disbursed,
                    amount AS expenses
             FROM expense_transactions
         )
@@ -129,7 +143,9 @@ def build_monthly_account_report(db) -> dict:
                 "savings_collections": 0.0,
                 "loan_repayments": 0.0,
                 "inflow": 0.0,
+                "loan_disbursed": 0.0,
                 "expenses": 0.0,
+                "outflow": 0.0,
                 "net": 0.0,
             },
         }
@@ -150,7 +166,9 @@ def build_monthly_account_report(db) -> dict:
         "savings_collections": 0.0,
         "loan_repayments": 0.0,
         "inflow": 0.0,
+        "loan_disbursed": 0.0,
         "expenses": 0.0,
+        "outflow": 0.0,
         "net": 0.0,
     }
     cursor = start_month
@@ -159,9 +177,11 @@ def build_monthly_account_report(db) -> dict:
         source = by_month.get(month_key, {})
         savings_collections = float(source.get("savings_collections") or 0)
         loan_repayments = float(source.get("loan_repayments") or 0)
+        loan_disbursed = float(source.get("loan_disbursed") or 0)
         expenses = float(source.get("expenses") or 0)
         inflow = savings_collections + loan_repayments
-        net = inflow - expenses
+        outflow = loan_disbursed + expenses
+        net = inflow - outflow
         opening = running_balance
         closing = opening + net
 
@@ -171,7 +191,9 @@ def build_monthly_account_report(db) -> dict:
             "savings_collections": savings_collections,
             "loan_repayments": loan_repayments,
             "inflow": inflow,
+            "loan_disbursed": loan_disbursed,
             "expenses": expenses,
+            "outflow": outflow,
             "net": net,
             "closing_balance": closing,
         })
@@ -179,7 +201,9 @@ def build_monthly_account_report(db) -> dict:
         totals["savings_collections"] += savings_collections
         totals["loan_repayments"] += loan_repayments
         totals["inflow"] += inflow
+        totals["loan_disbursed"] += loan_disbursed
         totals["expenses"] += expenses
+        totals["outflow"] += outflow
         totals["net"] += net
 
         running_balance = closing
@@ -704,8 +728,10 @@ def dashboard():
     account_opening_balance = float(account_report["opening_balance"] or 0)
     account_savings_collections = float(account_report["totals"]["savings_collections"] or 0)
     account_loan_repayments = float(account_report["totals"]["loan_repayments"] or 0)
+    account_loan_disbursed = float(account_report["totals"]["loan_disbursed"] or 0)
+    account_expenses = float(account_report["totals"]["expenses"] or 0)
     account_total_inflow = float(account_report["totals"]["inflow"] or 0)
-    account_total_outflow = float(account_report["totals"]["expenses"] or 0)
+    account_total_outflow = float(account_report["totals"]["outflow"] or 0)
     account_current_balance = float(account_report["closing_balance"] or 0)
     portfolio = db.execute("""
         SELECT
@@ -788,6 +814,8 @@ def dashboard():
             "account_opening_balance": account_opening_balance,
             "account_savings_collections": account_savings_collections,
             "account_loan_repayments": account_loan_repayments,
+            "account_loan_disbursed": account_loan_disbursed,
+            "account_expenses": account_expenses,
             "account_total_inflow": account_total_inflow,
             "account_total_outflow": account_total_outflow,
             "account_current_balance": account_current_balance,
@@ -1984,7 +2012,7 @@ def export_report(report_type):
         ).fetchall()
         for r in rows: writer.writerow(list(r))
     elif report_type == "account-monthly":
-        writer.writerow(["Month","Opening Balance","Savings Collections","Loan Repayments","Total Inflow","Expenses","Net Movement","Closing Balance"])
+        writer.writerow(["Month","Opening Balance","Savings Collections","Loan Repayments","Total Inflow","Loans Disbursed","Expenses","Total Outflow","Net Movement","Closing Balance"])
         data = build_monthly_account_report(db)
         for row in data.get("months", []):
             writer.writerow([
@@ -1993,7 +2021,9 @@ def export_report(report_type):
                 row.get("savings_collections"),
                 row.get("loan_repayments"),
                 row.get("inflow"),
+                row.get("loan_disbursed"),
                 row.get("expenses"),
+                row.get("outflow"),
                 row.get("net"),
                 row.get("closing_balance"),
             ])

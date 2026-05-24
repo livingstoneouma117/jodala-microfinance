@@ -304,6 +304,7 @@ def _seed_data(conn):
         ("logo_url", ""),
         ("address", "Nairobi, Kenya"),
         ("phone", "0712345678"),
+        ("account_opening_balance", "0"),
     ]
     c.executemany("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", settings)
 
@@ -536,6 +537,7 @@ def _migrate_schema(c):
         ("logo_url", ""),
         ("address", "Nairobi, Kenya"),
         ("phone", "0712345678"),
+        ("account_opening_balance", "0"),
     ]
     c.executemany("INSERT OR IGNORE INTO app_settings (key,value) VALUES (?,?)", defaults)
 

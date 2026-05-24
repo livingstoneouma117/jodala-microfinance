@@ -777,6 +777,10 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
               </div>
             </div>
             <div class="form-group"><label class="form-label">Phone</label><input id="set-phone" class="form-input" placeholder="07XXXXXXXX"/></div>
+            <div class="form-group">
+              <label class="form-label">Main Account Opening Balance (KES)</label>
+              <input id="set-opening-balance" class="form-input" type="number" min="0" step="0.01" placeholder="0"/>
+            </div>
           </div>
           <div class="form-group mt3"><label class="form-label">Address</label><input id="set-address" class="form-input" placeholder="Physical address"/></div>
           <div class="modal-footer" style="padding-left:0;padding-right:0;margin-top:16px">
@@ -1194,6 +1198,13 @@ async function loadDashboard(){
 
 function renderDashStats(s){
   const cards=[
+    {
+      label:'Main Account Balance',
+      value:`KES ${fmt(s.account_current_balance||0,0)}`,
+      sub:`Opening KES ${fmt(s.account_opening_balance||0,0)} · Inflow KES ${fmt(s.account_total_inflow||0,0)} · Outflow KES ${fmt(s.account_total_outflow||0,0)}`,
+      icon:'🏧',
+      cls:'stat-cyan'
+    },
     {label:'Portfolio Outstanding',value:`KES ${fmt(s.outstanding_portfolio,0)}`,sub:`KES ${fmt(s.total_disbursed,0)} disbursed`,icon:'💰',cls:'stat-green'},
     {label:'Portfolio at Risk',value:`${fmt(s.portfolio_at_risk,1)}%`,sub:`KES ${fmt(s.amount_in_arrears,0)} in arrears`,icon:'⚠️',cls:'stat-red'},
     {label:'Loans in Pipeline',value:(s.pending_loans||0)+(s.approved_loans||0),sub:`${s.pending_loans||0} pending · ${s.approved_loans||0} approved`,icon:'📋',cls:'stat-blue'},
@@ -2394,6 +2405,7 @@ async function loadSettings(){
       document.getElementById('set-logo-text').value=appSettings.logo_text||'';
       document.getElementById('set-address').value=appSettings.address||'';
       document.getElementById('set-phone').value=appSettings.phone||'';
+      document.getElementById('set-opening-balance').value=appSettings.account_opening_balance||'0';
       pendingLogoImage=appSettings.logo_image||'';
       renderLogoPreview();
     }
@@ -2458,7 +2470,8 @@ async function saveSettings(){
     logo_image:pendingLogoImage||'',
     logo_url:'',
     address:document.getElementById('set-address').value,
-    phone:document.getElementById('set-phone').value
+    phone:document.getElementById('set-phone').value,
+    account_opening_balance:document.getElementById('set-opening-balance').value||'0'
   };
   try{
     const res=await api('/settings',{method:'PUT',body:JSON.stringify(data)});

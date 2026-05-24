@@ -68,6 +68,7 @@ def get_settings_dict():
         "logo_url": "",
         "address": "",
         "phone": "",
+        "account_opening_balance": "0",
     }
     settings.update({r["key"]: r["value"] for r in rows})
     return settings
@@ -580,6 +581,16 @@ def dashboard():
     total_repaid   = db.execute("SELECT COALESCE(SUM(amount),0) FROM repayments").fetchone()[0]
     total_penalties= db.execute("SELECT COALESCE(SUM(penalties),0) FROM loans").fetchone()[0]
     total_expenses = db.execute("SELECT COALESCE(SUM(amount),0) FROM expense_transactions").fetchone()[0]
+    opening_balance_row = db.execute(
+        "SELECT value FROM app_settings WHERE key='account_opening_balance'"
+    ).fetchone()
+    try:
+        account_opening_balance = float((opening_balance_row["value"] if opening_balance_row else 0) or 0)
+    except (TypeError, ValueError):
+        account_opening_balance = 0.0
+    account_total_inflow = float(total_repaid or 0)
+    account_total_outflow = float(total_disbursed or 0) + float(total_expenses or 0)
+    account_current_balance = account_opening_balance + account_total_inflow - account_total_outflow
     portfolio = db.execute("""
         SELECT
           COALESCE(SUM(total_repayable),0) AS total_repayable,
@@ -658,6 +669,10 @@ def dashboard():
             "total_repaid":    total_repaid,
             "total_penalties": total_penalties,
             "total_expenses":  total_expenses,
+            "account_opening_balance": account_opening_balance,
+            "account_total_inflow": account_total_inflow,
+            "account_total_outflow": account_total_outflow,
+            "account_current_balance": account_current_balance,
             "collection_rate": collection_rate,
             "outstanding_portfolio": outstanding_portfolio,
             "amount_in_arrears": par_amount,
@@ -2049,7 +2064,7 @@ def get_settings():
 @app.route("/api/settings", methods=["PUT"])
 @roles_required("admin")
 def update_settings():
-    allowed = {"sacco_name", "logo_text", "logo_image", "logo_url", "address", "phone"}
+    allowed = {"sacco_name", "logo_text", "logo_image", "logo_url", "address", "phone", "account_opening_balance"}
     d = request.json or {}
     db = get_db()
     for key, value in d.items():

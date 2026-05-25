@@ -1,4 +1,4 @@
-# SACCOFinance LMS v2.0
+# SACCOFinance LMS v3.0
 ### Microfinance Loan Management System
 
 A full-stack web application for SACCOs, cooperatives, and small lending businesses.

@@ -2340,7 +2340,7 @@ def calculate():
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status":"ok","version":"2.0.0","timestamp": datetime.utcnow().isoformat()})
+    return jsonify({"status":"ok","version":"3.0.0","timestamp": datetime.utcnow().isoformat()})
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────

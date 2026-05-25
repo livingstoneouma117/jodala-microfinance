@@ -564,8 +564,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
               <input id="loan-search" class="form-input" placeholder="Search loans, members..." oninput="debouncedLoadLoans()"/>
             </div>
             <select id="loan-status-filter" class="form-select" style="width:auto" onchange="loadLoans()">
-              <option value="open" selected>Open Loans</option>
-              <option value="all">All Statuses</option>
+              <option value="all" selected>All Statuses</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
               <option value="active">Active</option>
@@ -1592,13 +1591,13 @@ const debouncedLoadLoans = debounce(()=>{loansPage=1;loadLoans()});
 
 async function loadLoans(){
   const q=document.getElementById('loan-search')?.value||'';
-  const status=document.getElementById('loan-status-filter')?.value||'open';
+  const status=document.getElementById('loan-status-filter')?.value||'all';
   try{
     const res=await api(`/loans?q=${encodeURIComponent(q)}&status=${status}&page=${loansPage}&limit=10`);
     if(!res?.success)return;
     const {loans,total,pages}=res.data;
     loansList=loans;
-    document.getElementById('loans-sub').textContent=status==='open'?`${total} open loans`:`${total} total loans`;
+    document.getElementById('loans-sub').textContent=`${total} total loans`;
     const isAdmin=currentUser?.role==='admin';
     const canCreate=['admin','officer'].includes(currentUser?.role);
     const canEdit=['admin','officer'].includes(currentUser?.role);

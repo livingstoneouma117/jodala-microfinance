@@ -578,7 +578,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <div class="table-wrap">
           <table class="loans-table">
             <thead><tr>
-              <th>Loan ID</th><th>Member</th><th>Amount</th>
+              <th>Loan ID</th><th>Member</th><th>Principal</th>
               <th>Outstanding</th><th>Rate / Term</th><th>Loan Date</th><th>Due Date</th><th>Method</th><th>Status</th>
               <th>Paid</th><th>Actions</th>
             </tr></thead>
@@ -1609,7 +1609,7 @@ async function loadLoans(){
       <tr>
         <td data-label="Loan ID"><span class="text-accent font-bold" style="font-family:monospace">${l.id}</span></td>
         <td data-label="Member"><div class="font-bold">${l.member_name}</div><div class="text-xs text-muted">${l.member_phone||''}</div></td>
-        <td data-label="Amount" class="font-bold">KES ${fmt(l.amount,0)}</td>
+        <td data-label="Principal" class="font-bold">KES ${fmt(l.amount,0)}</td>
         <td data-label="Outstanding" class="font-bold text-amber">KES ${fmt(Math.max(0,l.outstanding||0),0)}</td>
         <td data-label="Rate / Term" class="text-muted">${l.annual_rate}% / ${l.term_months}mo</td>
         <td data-label="Loan Date" class="text-muted">${fmtSafeD(l.borrowed_date)}</td>

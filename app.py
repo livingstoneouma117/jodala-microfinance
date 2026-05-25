@@ -1082,7 +1082,11 @@ def get_loans():
     if q:
         where.append("(l.id LIKE ? OR l.member_id LIKE ? OR m.name LIKE ? OR l.purpose LIKE ?)")
         params.extend([f"%{q}%"] * 4)
-    if status != "all":
+    if status == "open":
+        # "Open" view excludes fully completed loans from the main working list.
+        where.append("l.status<>?")
+        params.append("completed")
+    elif status != "all":
         where.append("l.status=?")
         params.append(status)
 

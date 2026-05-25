@@ -564,6 +564,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
               <input id="loan-search" class="form-input" placeholder="Search loans, members..." oninput="debouncedLoadLoans()"/>
             </div>
             <select id="loan-status-filter" class="form-select" style="width:auto" onchange="loadLoans()">
+              <option value="open" selected>Open Loans</option>
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
@@ -578,7 +579,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
           <table class="loans-table">
             <thead><tr>
               <th>Loan ID</th><th>Member</th><th>Amount</th>
-              <th>Rate / Term</th><th>Loan Date</th><th>Due Date</th><th>Method</th><th>Status</th>
+              <th>Outstanding</th><th>Rate / Term</th><th>Loan Date</th><th>Due Date</th><th>Method</th><th>Status</th>
               <th>Paid</th><th>Actions</th>
             </tr></thead>
             <tbody id="loans-tbody"></tbody>
@@ -1591,13 +1592,13 @@ const debouncedLoadLoans = debounce(()=>{loansPage=1;loadLoans()});
 
 async function loadLoans(){
   const q=document.getElementById('loan-search')?.value||'';
-  const status=document.getElementById('loan-status-filter')?.value||'all';
+  const status=document.getElementById('loan-status-filter')?.value||'open';
   try{
     const res=await api(`/loans?q=${encodeURIComponent(q)}&status=${status}&page=${loansPage}&limit=10`);
     if(!res?.success)return;
     const {loans,total,pages}=res.data;
     loansList=loans;
-    document.getElementById('loans-sub').textContent=`${total} total loans`;
+    document.getElementById('loans-sub').textContent=status==='open'?`${total} open loans`:`${total} total loans`;
     const isAdmin=currentUser?.role==='admin';
     const canCreate=['admin','officer'].includes(currentUser?.role);
     const canEdit=['admin','officer'].includes(currentUser?.role);
@@ -1609,6 +1610,7 @@ async function loadLoans(){
         <td data-label="Loan ID"><span class="text-accent font-bold" style="font-family:monospace">${l.id}</span></td>
         <td data-label="Member"><div class="font-bold">${l.member_name}</div><div class="text-xs text-muted">${l.member_phone||''}</div></td>
         <td data-label="Amount" class="font-bold">KES ${fmt(l.amount,0)}</td>
+        <td data-label="Outstanding" class="font-bold text-amber">KES ${fmt(Math.max(0,l.outstanding||0),0)}</td>
         <td data-label="Rate / Term" class="text-muted">${l.annual_rate}% / ${l.term_months}mo</td>
         <td data-label="Loan Date" class="text-muted">${fmtSafeD(l.borrowed_date)}</td>
         <td data-label="Due Date" class="text-muted">${l.next_due_date?fmtSafeD(l.next_due_date):'—'}</td>
@@ -1634,7 +1636,7 @@ async function loadLoans(){
               <button class="btn-icon" title="Disburse" onclick="disburseLoan('${l.id}')" style="color:var(--accent2)">Disburse</button>`:''}
           </div>
         </td>
-      </tr>`).join('')||'<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">💰</div><div class="empty-msg">No loans found</div></div></td></tr>';
+      </tr>`).join('')||'<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">💰</div><div class="empty-msg">No loans found</div></div></td></tr>';
 
     renderPagination('loans-pagination',pages,loansPage,p=>{loansPage=p;loadLoans()});
   }catch(e){toast(e.message,'error')}
@@ -2278,7 +2280,9 @@ async function submitRepayment(){
     if(res?.success){
       toast(`Payment recorded. Ref: ${res.data.reference}`);
       closeModal('repay-modal');
+      loadLoans();
       loadRepayments();
+      if(activePage==='dashboard')loadDashboard();
     }
   }catch(e){toast(e.message,'error')}
 }

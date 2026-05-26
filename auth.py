@@ -17,9 +17,23 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-in-production")
 ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 EXP_HOURS = _int_env("JWT_EXP_HOURS", 24)
+
+
+def _load_secret_key() -> str:
+    key = (os.environ.get("SECRET_KEY") or "").strip()
+    if not key:
+        # Dev fallback; set SECRET_KEY explicitly in production.
+        key = "dev-secret-key-change-this-before-production-2026"
+    if ALGORITHM.upper().startswith("HS") and len(key.encode("utf-8")) < 32:
+        raise RuntimeError(
+            "SECRET_KEY is too short for HMAC JWT. Use at least 32 bytes."
+        )
+    return key
+
+
+SECRET_KEY = _load_secret_key()
 
 
 def hash_password(password: str) -> str:

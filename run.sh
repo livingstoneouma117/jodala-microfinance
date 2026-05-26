@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp -n .env.example .env
-uvicorn app.main:app --reload
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Keep backward compatibility for users who still run ./run.sh.
+exec "$ROOT_DIR/start.sh"

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>SACCOFinance LMS</title>
+<title>Jodala Microfinance</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"/>
@@ -338,10 +338,10 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
     <div class="login-panel">
       <div>
         <div class="app-logo" id="login-panel-logo">SF</div>
-        <h1>Loan operations for SACCOs and chamas.</h1>
-        <p>Manage members, external borrowers, approvals, repayments, savings, users, and loan statements from one working system.</p>
+        <h1>Daily loan and savings operations in one place.</h1>
+        <p>Track members, borrowers, loans, repayments, savings, and reports without switching systems.</p>
       </div>
-      <div class="text-xs" style="color:#8ea0b8">Secure staff access. Use username and password.</div>
+      <div class="text-xs" style="color:#8ea0b8">Staff access is role-based. Sign in with your username and password.</div>
     </div>
     <div class="login-card-wrap">
   <div class="login-card">
@@ -352,7 +352,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         </svg>
       </div>
       <div class="login-title">SACCO<span>Finance</span></div>
-      <div class="login-sub">Loan Management System v3.0</div>
+      <div class="login-sub">Operations Portal v3.0</div>
     </div>
 
     <div class="flex flex-col gap3">
@@ -384,7 +384,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
     <div class="sidebar-logo">
       <div class="app-logo" id="sb-logo-mark">SF</div>
       <div><div class="brand" id="sb-brand">SACCO<span>Finance</span></div>
-      <div class="version">Loan management</div></div>
+      <div class="version">Loan operations</div></div>
     </div>
     <div class="sidebar-user">
       <div class="avatar" id="sb-avatar">AD</div>
@@ -483,7 +483,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
       <!-- ── DASHBOARD ───────────────────────────────────────────────── -->
       <div class="page active" id="page-dashboard">
         <div class="page-header">
-          <div><div class="page-header-title">Dashboard</div><div class="page-header-sub">Welcome back — real-time overview</div></div>
+          <div><div class="page-header-title">Dashboard</div><div class="page-header-sub">Today's lending and collections snapshot</div></div>
           <div class="text-sm text-muted" id="dash-date"></div>
         </div>
         <div class="grid4 mb5" id="dash-stats"></div>
@@ -1164,7 +1164,7 @@ async function doLogin(){
     err.textContent=e.message;
     err.style.display='block';
   }finally{
-    btn.textContent='Sign In →';
+    btn.textContent='Sign In';
     btn.disabled=false;
   }
 }

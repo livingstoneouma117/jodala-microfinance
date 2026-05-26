@@ -1798,8 +1798,8 @@ async function viewLoan(id){
       <div class="card mb4">
         <div class="grid4 gap3">
           ${[['Total Repayable',`KES ${fmt(summary.total_repayable,0)}`,'text-text'],
-             ['Total Paid',`KES ${fmt(summary.total_paid,0)}`,'text-green'],
-              ['Outstanding',`KES ${fmt(summary.outstanding,0)}`,'text-amber'],
+             ['Repaid Amount',`KES ${fmt(summary.total_paid,0)}`,'text-green'],
+              ['Balance (To Pay)',`KES ${fmt(summary.outstanding,0)}`,'text-amber'],
               ['Arrears',`KES ${fmt(risk.amount_in_arrears||0,0)}`,'text-red']
           ].map(([k,v,c])=>`<div class="text-center"><div class="text-xs text-muted mb1">${k}</div><div class="${c} font-bold text-lg">${v}</div></div>`).join('')}
         </div>
@@ -1807,9 +1807,9 @@ async function viewLoan(id){
         <div class="text-xs text-muted text-right mt1">${paidPct}% repaid · ${summary.installments_paid} of ${schedule.length} installments${risk.days_in_arrears?` · ${risk.days_in_arrears} days in arrears`:''}</div>
       </div>
       ${schedule.length?`
-      <div class="font-bold mb2">Repayment Schedule</div>
+      <div class="font-bold mb2">Repayment Schedule (Remaining Balance)</div>
       <div class="table-wrap mb4" style="max-height:280px;overflow-y:auto">
-        <table><thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Repayment</th><th>Balance</th><th>Status</th></tr></thead>
+        <table><thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Installment Amount</th><th>Balance (To Pay)</th><th>Status</th></tr></thead>
         <tbody>${schedule.map(r=>`<tr>
           <td class="text-muted">${r.installment}</td>
           <td>${fmtSafeD(r.due_date)}</td>

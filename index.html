@@ -1807,21 +1807,18 @@ async function viewLoan(id){
         <div class="text-xs text-muted text-right mt1">${paidPct}% repaid · ${summary.installments_paid} of ${schedule.length} installments${risk.days_in_arrears?` · ${risk.days_in_arrears} days in arrears`:''}</div>
       </div>
       ${schedule.length?`
-      <div class="font-bold mb2">Repayment Schedule (Remaining Balance)</div>
+      <div class="font-bold mb2">Repayment Schedule (Installment Progress)</div>
       <div class="table-wrap mb4" style="max-height:280px;overflow-y:auto">
-        <table><thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Installment Amount</th><th>Balance (To Pay)</th><th>Status</th></tr></thead>
+        <table><thead><tr><th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Installment Amount</th><th>Paid on Installment</th><th>Installment Balance</th><th>Status</th></tr></thead>
         <tbody>${(()=>{
           const totalPaid=Math.max(0,Number(summary.total_paid||0));
-          const totalRepayable=Math.max(0,Number(summary.total_repayable||0));
           let paidCarry=totalPaid;
-          let cumulativeDue=0;
           const now=new Date();
           return schedule.map(r=>{
             const due=Number(r.repayment||0);
             const rowPaid=Math.max(0,Math.min(paidCarry,due));
             paidCarry=Math.max(0,paidCarry-rowPaid);
-            cumulativeDue+=due;
-            const remainingTotal=Math.max(0,totalRepayable-Math.min(totalPaid,cumulativeDue));
+            const rowBalance=Math.max(0,due-rowPaid);
             const statusHtml=rowPaid+0.01>=due
               ? '<span class="text-green font-bold">✓ Paid</span>'
               : rowPaid>0
@@ -1833,7 +1830,8 @@ async function viewLoan(id){
               <td>KES ${fmt(r.principal)}</td>
               <td class="text-amber">KES ${fmt(r.interest)}</td>
               <td class="font-bold">KES ${fmt(r.repayment)}</td>
-              <td class="text-muted">KES ${fmt(remainingTotal)}</td>
+              <td class="text-green">KES ${fmt(rowPaid)}</td>
+              <td class="text-muted">KES ${fmt(rowBalance)}</td>
               <td>${statusHtml}</td>
             </tr>`;
           }).join('');
@@ -1843,7 +1841,9 @@ async function viewLoan(id){
           <td class="font-bold">KES ${fmt(schedule.reduce((s,r)=>s+r.principal,0))}</td>
           <td class="font-bold text-amber">KES ${fmt(schedule.reduce((s,r)=>s+r.interest,0))}</td>
           <td class="font-bold">KES ${fmt(schedule.reduce((s,r)=>s+r.repayment,0))}</td>
-          <td colspan="2"></td>
+          <td class="font-bold text-green">KES ${fmt(Math.max(0,Number(summary.total_paid||0)))}</td>
+          <td class="font-bold text-muted">KES ${fmt(Math.max(0,Number(summary.outstanding||0)))}</td>
+          <td></td>
         </tr></tfoot>
         </table>
       </div>`:''}

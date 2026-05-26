@@ -52,6 +52,15 @@ For local React development with hot reload:
 3. `npm run dev`
 4. Keep Flask running on `http://localhost:5000` for API proxy calls.
 
+Phase 2 pages now available in v3:
+- Dashboard (stats + charts)
+- Loans (LoanForm modal + details modal)
+- Members (profile/activity modal)
+- Savings
+- Repayments
+- Reports (CSV/XLSX export)
+- Settings
+
 ## Local Setup (Linux/macOS)
 1. `cd /path/to/jodala chama`
 2. `python3 -m venv .venv`

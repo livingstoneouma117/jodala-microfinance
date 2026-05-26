@@ -4,7 +4,7 @@ services:
     name: jodala-microfinance
     plan: starter
     region: frankfurt
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "pip install -r requirements.txt && python frontend/build_frontend.py"
     startCommand: "python app.py"
     healthCheckPath: /api/health
     autoDeployTrigger: commit

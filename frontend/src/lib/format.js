@@ -13,3 +13,11 @@ export function statusClass(status) {
   if (safe === "rejected") return "status status-rejected";
   return "status";
 }
+
+export function formatDate(value) {
+  if (!value) return "-";
+  const safe = String(value).slice(0, 10);
+  const date = new Date(safe);
+  if (Number.isNaN(date.getTime())) return safe;
+  return date.toLocaleDateString("en-KE", { year: "numeric", month: "short", day: "numeric" });
+}

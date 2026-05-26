@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../lib/api";
 
-function LoanForm({ onSaved }) {
+function LoanForm({ onSaved, asPanel = true }) {
   const [borrowers, setBorrowers] = useState([]);
   const [form, setForm] = useState({
     member_id: "",
@@ -59,7 +59,7 @@ function LoanForm({ onSaved }) {
   }
 
   return (
-    <form onSubmit={submit} className="panel stack">
+    <form onSubmit={submit} className={asPanel ? "panel stack" : "stack"}>
       <h3>Loan Form</h3>
       <p className="muted">Create a loan application with reusable form logic.</p>
 

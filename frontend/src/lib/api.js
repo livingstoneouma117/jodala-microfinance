@@ -50,3 +50,37 @@ export async function login(username, password) {
   });
   return payload?.data?.token || "";
 }
+
+export async function apiFetchBlob(path, options = {}) {
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(path, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try {
+      const payload = await response.json();
+      message = payload?.error || payload?.message || message;
+    } catch {
+      // keep default message
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: response.headers.get("Content-Disposition") || "",
+    contentType: response.headers.get("Content-Type") || "",
+  };
+}

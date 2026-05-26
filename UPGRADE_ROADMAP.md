@@ -9,7 +9,7 @@ This document breaks the modernization work into deploy-safe phases.
 - Dark mode toggle with persistent user preference
 - Member activity timeline (loans, savings, repayments)
 
-## Phase 2 (Frontend Modernization)
+## Phase 2 (Frontend Modernization) - Completed
 Goal: move away from monolithic `index.html` to component architecture.
 
 Current progress (implemented):
@@ -19,6 +19,17 @@ Current progress (implemented):
   - `LoanForm`
   - `LoanList`
   - `MemberTable`
+- Added shared UI primitives:
+  - `DataTable` (with pagination)
+  - `Modal`
+  - `StatCard`
+  - `Toast`
+- Added missing feature pages:
+  - `SavingsPage`
+  - `RepaymentsPage`
+  - `ReportsPage` (CSV/XLSX export)
+  - `SettingsPage`
+- Added dashboard charts (monthly repayment trend + loan status breakdown)
 - Added Flask SPA serving route at `/v3` for built assets (`frontend/dist`)
 - Kept legacy UI at `/` active to avoid deployment risk
 

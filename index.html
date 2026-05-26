@@ -30,6 +30,22 @@
   --shadow:   0 10px 30px rgba(25,42,70,0.08);
   --transition:all 0.2s ease;
 }
+:root[data-theme="dark"]{
+  --bg:       #0b1220;
+  --surface:  #111a2e;
+  --surface2: #0f1729;
+  --border:   #22324c;
+  --border2:  #325075;
+  --text:     #e5edf8;
+  --muted:    #a2b3cc;
+  --accent:   #0f9a8d;
+  --accent2:  #4f8dfc;
+  --green:    #3ddc84;
+  --red:      #ff6b6b;
+  --amber:    #f4b65f;
+  --purple:   #9a7bf6;
+  --shadow:   0 12px 30px rgba(0,0,0,0.35);
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.5}
 ::-webkit-scrollbar{width:4px;height:4px}
@@ -156,6 +172,10 @@ td{padding:11px 14px;border-top:1px solid var(--border);font-size:13px;vertical-
 tbody tr{background:var(--surface);transition:var(--transition)}
 tbody tr:nth-child(even){background:#fbfcfe}
 tbody tr:hover{background:var(--surface2)}
+:root[data-theme="dark"] tbody tr:nth-child(even){background:#13203a}
+:root[data-theme="dark"] #sidebar{background:#0f1729;border-right-color:#1e2f4a}
+:root[data-theme="dark"] .login-card{background:#111a2e;border-color:var(--border)}
+:root[data-theme="dark"] .login-panel{background:#13203a;border-color:var(--border)}
 .td-actions{display:flex;gap:4px;align-items:center}
 tfoot td{border-top:2px solid var(--border2);background:var(--surface2);font-weight:700}
 
@@ -470,6 +490,9 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <span class="page-title" id="topbar-title">Dashboard</span>
       </div>
       <div class="topbar-actions">
+        <button class="topbar-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark mode">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
+        </button>
         <button class="topbar-btn" onclick="navigate('notifications')" title="Notifications">
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
           <span class="notif-dot" id="topbar-notif-dot" style="display:none"></span>
@@ -692,12 +715,16 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <div class="page-header">
           <div><div class="page-header-title">Reports &amp; Analytics</div><div class="page-header-sub">Export and analyse system data</div></div>
           <div class="flex gap2 flex-wrap">
-            <button class="btn btn-ghost btn-sm" onclick="exportReport('loans')">↓ Loans CSV</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportReport('repayments')">↓ Repayments CSV</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportReport('savings')">↓ Savings CSV</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportReport('expenses')">↓ Expenses CSV</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportReport('account-monthly')">↓ Account Monthly CSV</button>
-            <button class="btn btn-ghost btn-sm" onclick="exportReport('members')">↓ Members CSV</button>
+            <select id="report-export-format" class="form-select" style="width:auto">
+              <option value="csv">CSV</option>
+              <option value="xlsx">Excel (.xlsx)</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('loans')">↓ Loans</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('repayments')">↓ Repayments</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('savings')">↓ Savings</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('expenses')">↓ Expenses</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('account-monthly')">↓ Account Monthly</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportReport('members')">↓ Members</button>
           </div>
         </div>
         <div class="grid4 mb5" id="report-kpis"></div>
@@ -1064,6 +1091,33 @@ let pendingLoanApplications = [];
 let expenseAccounts = [];
 let appSettings = {};
 let pendingLogoImage = null;
+const THEME_STORAGE_KEY = 'sacco_theme';
+
+function applyTheme(theme){
+  const root=document.documentElement;
+  root.setAttribute('data-theme', theme==='dark' ? 'dark' : 'light');
+  const btn=document.getElementById('theme-toggle-btn');
+  if(btn){
+    btn.title = theme==='dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  }
+}
+
+function initTheme(){
+  const saved=(localStorage.getItem(THEME_STORAGE_KEY)||'').trim();
+  if(saved==='dark' || saved==='light'){
+    applyTheme(saved);
+    return;
+  }
+  const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(prefersDark ? 'dark' : 'light');
+}
+
+function toggleTheme(){
+  const current=(document.documentElement.getAttribute('data-theme')||'light').toLowerCase();
+  const next=current==='dark' ? 'light' : 'dark';
+  applyTheme(next);
+  localStorage.setItem(THEME_STORAGE_KEY, next);
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const fmt  = (n,d=2) => Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -1105,6 +1159,16 @@ const dash = v => (v === undefined || v === null || v === '') ? '—' : v;
 const today= () => new Date().toISOString().split('T')[0];
 
 function debounce(fn, ms=400){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
+
+function passwordPolicyError(password){
+  const p=String(password||'');
+  if(p.length<8)return 'Password must be at least 8 characters';
+  if(!/[A-Z]/.test(p))return 'Password must include an uppercase letter';
+  if(!/[a-z]/.test(p))return 'Password must include a lowercase letter';
+  if(!/\d/.test(p))return 'Password must include a number';
+  if(!/[^A-Za-z0-9]/.test(p))return 'Password must include a special character';
+  return '';
+}
 
 async function api(path, opts={}){
   const headers = {'Content-Type':'application/json'};
@@ -1198,7 +1262,8 @@ async function submitPasswordChange(){
   const btn=document.getElementById('cp-submit-btn');
 
   if(!oldPwd || !newPwd || !confirmPwd){toast('All password fields are required','error');return}
-  if(newPwd.length<4){toast('New password must be at least 4 characters','error');return}
+  const pwdErr=passwordPolicyError(newPwd);
+  if(pwdErr){toast(pwdErr,'error');return}
   if(newPwd!==confirmPwd){toast('New password confirmation does not match','error');return}
   if(oldPwd===newPwd){toast('New password must be different from current password','error');return}
 
@@ -1525,7 +1590,28 @@ async function viewMember(id){
   try{
     const res=await api(`/members/${id}`);
     if(!res?.success)return;
-    const {member:m,loans,savings_transactions:st}=res.data;
+    const {member:m,loans,savings_transactions:st,repayments=[]}=res.data;
+    const timeline=[
+      ...loans.map(l=>({
+        date:l.disbursed_date||l.approved_date||l.applied_date||l.created_at,
+        label:'Loan',
+        details:`${l.id} · ${l.status} · KES ${fmt(l.amount,0)}`
+      })),
+      ...st.map(t=>({
+        date:t.txn_date||t.created_at,
+        label:t.type==='withdrawal'?'Savings Withdrawal':'Savings Deposit',
+        details:`${t.reference||'—'} · ${t.type==='withdrawal'?'-':'+'}KES ${fmt(t.amount,0)}`
+      })),
+      ...repayments.map(r=>({
+        date:r.payment_date||r.created_at,
+        label:'Loan Repayment',
+        details:`${r.loan_id} · ${r.reference||r.id} · KES ${fmt(r.amount,0)}`
+      }))
+    ]
+    .filter(x=>x.date)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date))
+    .slice(0,30);
+
     document.getElementById('member-detail-body').innerHTML=`
       <div class="grid2 gap3 mb4">
         ${[['Name',m.name],['Phone',m.phone||'—'],['Email',m.email||'—'],['National ID',m.national_id],
@@ -1533,6 +1619,10 @@ async function viewMember(id){
           ['Savings Balance','<span class="text-green font-bold">KES '+fmt(m.savings)+'</span>'],['Address',m.address||'—']
         ].map(([k,v])=>`<div class="surface2"><div class="text-xs text-muted mb1">${k}</div><div>${v}</div></div>`).join('')}
       </div>
+      <div class="font-bold mb3">Activity Timeline (${timeline.length})</div>
+      ${timeline.length?`<div class="table-wrap mb4"><table><thead><tr><th>Date</th><th>Activity</th><th>Details</th></tr></thead><tbody>
+        ${timeline.map(t=>`<tr><td class="text-muted">${fmtSafeD(dateOnly(t.date)||t.date)}</td><td class="font-bold">${t.label}</td><td>${t.details}</td></tr>`).join('')}
+      </tbody></table></div>`:'<div class="empty-state"><div class="empty-msg">No activity yet</div></div>'}
       <div class="font-bold mb3">Loan History (${loans.length})</div>
       ${loans.length?`<div class="table-wrap mb4"><table><thead><tr><th>ID</th><th>Amount</th><th>Purpose</th><th>Status</th><th>Applied</th></tr></thead><tbody>
         ${loans.map(l=>`<tr><td class="text-muted">${l.id}</td><td class="font-bold">KES ${fmt(l.amount,0)}</td><td>${l.purpose||'—'}</td><td>${badge(l.status)}</td><td>${fmtSafeD(l.applied_date)}</td></tr>`).join('')}
@@ -2405,15 +2495,29 @@ function renderAccountMonthlyReport(data){
     <td class="font-bold">KES ${fmt(closing,0)}</td>`;
 }
 
-function exportReport(type){
-  window.open(`${API}/reports/export/${type}?token=${token}`, '_blank');
-  // Also add auth header approach by creating a form
-  fetch(`${API}/reports/export/${type}`, {headers:{'Authorization':'Bearer '+token}})
-    .then(r=>r.blob()).then(blob=>{
+function exportReport(type, formatOpt=null){
+  const format=(formatOpt||document.getElementById('report-export-format')?.value||'csv').toLowerCase();
+  const safeFormat=(format==='xlsx'?'xlsx':'csv');
+  fetch(`${API}/reports/export/${type}?format=${safeFormat}`, {headers:{'Authorization':'Bearer '+token}})
+    .then(async r=>{
+      if(!r.ok){
+        const body=await r.json().catch(()=>null);
+        throw new Error(body?.error||'Export failed');
+      }
+      return r.blob();
+    })
+    .then(blob=>{
+      const ext=safeFormat==='xlsx'?'xlsx':'csv';
       const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');a.href=url;a.download=`${type}-report.csv`;a.click();
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=`${type}-report.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       URL.revokeObjectURL(url);
-    }).catch(e=>toast(e.message,'error'));
+    })
+    .catch(e=>toast(e.message,'error'));
 }
 
 // ── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -2532,6 +2636,10 @@ async function submitUser(){
   if(password)data.password=password;
   if(!data.name||!data.username){toast('Name and username are required','error');return}
   if(!id&&!data.password){toast('Password is required for new users','error');return}
+  if(data.password){
+    const pwdErr=passwordPolicyError(data.password);
+    if(pwdErr){toast(pwdErr,'error');return}
+  }
   try{
     const res=await api(id?`/users/${id}`:'/users',{method:id?'PUT':'POST',body:JSON.stringify(data)});
     if(res?.success){toast(id?'User updated':'User created');closeModal('user-modal');loadUsers();}
@@ -2541,6 +2649,8 @@ async function submitUser(){
 async function resetUserPassword(id){
   const password=prompt('Enter the new password');
   if(!password)return;
+  const pwdErr=passwordPolicyError(password);
+  if(pwdErr){toast(pwdErr,'error');return}
   try{
     const res=await api(`/users/${id}/password`,{method:'PATCH',body:JSON.stringify({password})});
     if(res?.success)toast('Password reset');
@@ -2684,6 +2794,7 @@ function renderPagination(containerId,pages,current,onPage){
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
+initTheme();
 loadSettings();
 tryAutoLogin();
 </script>

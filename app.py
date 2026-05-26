@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify, g, send_from_directory, make_response
 import os, json, sqlite3, base64, re
 from io import BytesIO
 from datetime import datetime, date
+import time as pytime
 from html import escape
 
 from database import get_db, init_db, hash_password as db_hash
@@ -15,6 +16,7 @@ from calculator import build_schedule, calculate_penalty, loan_summary
 
 # ── App setup ────────────────────────────────────────────────────────────────
 FRONTEND_DIR = os.path.dirname(__file__)
+REACT_DIST_DIR = os.path.join(FRONTEND_DIR, "frontend", "dist")
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
 
 # Manual CORS (no flask-cors available)
@@ -56,6 +58,90 @@ def success(data=None, msg="OK", code=200):
 
 def error(msg="Error", code=400):
     return jsonify({"success": False, "error": msg}), code
+
+
+PASSWORD_POLICY_MESSAGE = (
+    "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
+)
+
+
+def validate_password_strength(password: str) -> str | None:
+    pwd = str(password or "")
+    if len(pwd) < 8:
+        return PASSWORD_POLICY_MESSAGE
+    if not re.search(r"[A-Z]", pwd):
+        return PASSWORD_POLICY_MESSAGE
+    if not re.search(r"[a-z]", pwd):
+        return PASSWORD_POLICY_MESSAGE
+    if not re.search(r"\d", pwd):
+        return PASSWORD_POLICY_MESSAGE
+    if not re.search(r"[^A-Za-z0-9]", pwd):
+        return PASSWORD_POLICY_MESSAGE
+    return None
+
+
+def _int_env(name: str, default: int, minimum: int) -> int:
+    try:
+        return max(minimum, int(os.environ.get(name, str(default))))
+    except (TypeError, ValueError):
+        return max(minimum, default)
+
+
+LOGIN_MAX_ATTEMPTS = _int_env("LOGIN_MAX_ATTEMPTS", 5, 1)
+LOGIN_WINDOW_SECONDS = _int_env("LOGIN_WINDOW_SECONDS", 600, 60)
+LOGIN_BLOCK_SECONDS = _int_env("LOGIN_BLOCK_SECONDS", 900, 60)
+_LOGIN_ATTEMPTS: dict[str, dict] = {}
+
+
+def _cleanup_login_attempts(now_ts: float) -> None:
+    expired = []
+    for key, rec in _LOGIN_ATTEMPTS.items():
+        blocked_until = float(rec.get("blocked_until", 0) or 0)
+        last_seen = float(rec.get("last_seen", 0) or 0)
+        if blocked_until and blocked_until > now_ts:
+            continue
+        if now_ts - last_seen > LOGIN_WINDOW_SECONDS * 2:
+            expired.append(key)
+    for key in expired:
+        _LOGIN_ATTEMPTS.pop(key, None)
+
+
+def _login_attempt_key(username: str) -> str:
+    xff = (request.headers.get("X-Forwarded-For") or "").strip()
+    ip = (xff.split(",")[0].strip() if xff else "") or (request.remote_addr or "unknown")
+    return f"{ip}:{username.lower().strip()}"
+
+
+def _login_block_remaining_seconds(attempt_key: str) -> int:
+    now_ts = pytime.time()
+    rec = _LOGIN_ATTEMPTS.get(attempt_key)
+    if not rec:
+        return 0
+    blocked_until = float(rec.get("blocked_until", 0) or 0)
+    if blocked_until <= now_ts:
+        return 0
+    return int(blocked_until - now_ts)
+
+
+def _record_failed_login(attempt_key: str) -> int:
+    now_ts = pytime.time()
+    rec = _LOGIN_ATTEMPTS.get(attempt_key, {"attempts": 0, "window_start": now_ts, "blocked_until": 0, "last_seen": now_ts})
+    window_start = float(rec.get("window_start", now_ts) or now_ts)
+    if now_ts - window_start > LOGIN_WINDOW_SECONDS:
+        rec["attempts"] = 0
+        rec["window_start"] = now_ts
+        rec["blocked_until"] = 0
+    rec["attempts"] = int(rec.get("attempts", 0) or 0) + 1
+    rec["last_seen"] = now_ts
+    if rec["attempts"] >= LOGIN_MAX_ATTEMPTS:
+        rec["blocked_until"] = now_ts + LOGIN_BLOCK_SECONDS
+    _LOGIN_ATTEMPTS[attempt_key] = rec
+    _cleanup_login_attempts(now_ts)
+    return _login_block_remaining_seconds(attempt_key)
+
+
+def _clear_login_attempts(attempt_key: str) -> None:
+    _LOGIN_ATTEMPTS.pop(attempt_key, None)
 
 def get_settings_dict():
     db = get_db()
@@ -667,6 +753,22 @@ def rebuild_loan_schedule(db, loan: dict, start_date: str) -> None:
 def index():
     return send_from_directory(FRONTEND_DIR, "index.html")
 
+
+@app.route("/v3", defaults={"path": ""})
+@app.route("/v3/<path:path>")
+def index_v3(path):
+    if not os.path.isdir(REACT_DIST_DIR):
+        return (
+            "<h2>Frontend v3 build not found.</h2><p>Run <code>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</code> then reload <code>/v3</code>.</p>",
+            503,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    target = os.path.join(REACT_DIST_DIR, path) if path else ""
+    if path and os.path.isfile(target):
+        return send_from_directory(REACT_DIST_DIR, path)
+    return send_from_directory(REACT_DIST_DIR, "index.html")
+
 # ══════════════════════════════════════════════════════════════════════════════
 # AUTH
 # ══════════════════════════════════════════════════════════════════════════════
@@ -677,6 +779,11 @@ def login():
     pwd   = data.get("password","")
     if not username or not pwd:
         return error("Username and password are required")
+    attempt_key = _login_attempt_key(username)
+    blocked_for = _login_block_remaining_seconds(attempt_key)
+    if blocked_for > 0:
+        wait_mins = max(1, -(-blocked_for // 60))
+        return error(f"Too many login attempts. Try again in {wait_mins} minute(s).", 429)
 
     db   = get_db()
     user = row_to_dict(db.execute(
@@ -685,8 +792,10 @@ def login():
     db.close()
 
     if not user or user["password"] != hash_password(pwd):
+        _record_failed_login(attempt_key)
         return error("Invalid credentials", 401)
 
+    _clear_login_attempts(attempt_key)
     token = generate_token(user)
     return success({
         "token": token,
@@ -714,6 +823,9 @@ def change_password():
     new_pwd = data.get("new_password","")
     if not old_pwd or not new_pwd:
         return error("Both old and new password required")
+    pwd_err = validate_password_strength(new_pwd)
+    if pwd_err:
+        return error(pwd_err)
 
     db   = get_db()
     user = row_to_dict(db.execute("SELECT * FROM users WHERE id=?", (g.user["sub"],)).fetchone())
@@ -904,8 +1016,11 @@ def get_member(member_id):
     savings_txn = rows_to_list(db.execute(
         "SELECT * FROM savings_transactions WHERE member_id=? ORDER BY txn_date DESC LIMIT 20", (member_id,)
     ).fetchall())
+    repayments = rows_to_list(db.execute(
+        "SELECT * FROM repayments WHERE member_id=? ORDER BY payment_date DESC LIMIT 30", (member_id,)
+    ).fetchall())
     db.close()
-    return success({"member": member, "loans": loans, "savings_transactions": savings_txn})
+    return success({"member": member, "loans": loans, "savings_transactions": savings_txn, "repayments": repayments})
 
 
 @app.route("/api/members", methods=["POST"])
@@ -2009,68 +2124,112 @@ def report_account_monthly():
 def export_report(report_type):
     import csv, io
     db = get_db()
-    output = io.StringIO()
-    writer = csv.writer(output)
+    export_format = (request.args.get("format") or "csv").strip().lower()
+    rows = []
+    headers = []
 
     if report_type == "loans":
-        writer.writerow(["ID","Member","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"])
-        rows = db.execute(
+        headers = ["ID","Member","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"]
+        rows = rows_to_list(db.execute(
             """SELECT l.id,m.name,l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
                       (COALESCE(SUM(s.repayment), l.amount)-l.total_paid) as outstanding,l.penalties
                FROM loans l
                JOIN members m ON l.member_id=m.id
                LEFT JOIN loan_schedule s ON s.loan_id=l.id
                GROUP BY l.id"""
-        ).fetchall()
-        for r in rows: writer.writerow(list(r))
+        ).fetchall())
     elif report_type == "repayments":
-        writer.writerow(["ID","Loan","Member","Amount","Date","Method","Reference","Type"])
-        rows = db.execute(
+        headers = ["ID","Loan","Member","Amount","Date","Method","Reference","Type"]
+        rows = rows_to_list(db.execute(
             "SELECT r.id,r.loan_id,m.name,r.amount,r.payment_date,r.method,r.reference,r.type FROM repayments r JOIN members m ON r.member_id=m.id ORDER BY r.payment_date DESC"
-        ).fetchall()
-        for r in rows: writer.writerow(list(r))
+        ).fetchall())
     elif report_type == "savings":
-        writer.writerow(["Member ID","Member","Balance","Status"])
-        rows = db.execute(
+        headers = ["Member ID","Member","Balance","Status"]
+        rows = rows_to_list(db.execute(
             "SELECT m.id,m.name,sa.balance,m.status FROM members m LEFT JOIN savings_accounts sa ON m.id=sa.member_id WHERE m.member_type='member' ORDER BY sa.balance DESC"
-        ).fetchall()
-        for r in rows: writer.writerow(list(r))
+        ).fetchall())
     elif report_type == "expenses":
-        writer.writerow(["ID","Date","Account","Account Code","Amount","Payee","Reference","Notes","Recorded By"])
-        rows = db.execute(
+        headers = ["ID","Date","Account","Account Code","Amount","Payee","Reference","Notes","Recorded By"]
+        rows = rows_to_list(db.execute(
             """SELECT et.id, et.expense_date, ea.name, ea.code, et.amount, et.payee, et.reference, et.notes, u.name
                FROM expense_transactions et
                JOIN expense_accounts ea ON et.account_id=ea.id
                LEFT JOIN users u ON et.recorded_by=u.id
                ORDER BY et.expense_date DESC, et.created_at DESC"""
-        ).fetchall()
-        for r in rows: writer.writerow(list(r))
+        ).fetchall())
     elif report_type == "account-monthly":
-        writer.writerow(["Month","Opening Balance","Savings Collections","Loan Repayments","Total Inflow","Loans Disbursed","Expenses","Total Outflow","Net Movement","Closing Balance"])
+        headers = ["Month","Opening Balance","Savings Collections","Loan Repayments","Total Inflow","Loans Disbursed","Expenses","Total Outflow","Net Movement","Closing Balance"]
         data = build_monthly_account_report(db)
         for row in data.get("months", []):
-            writer.writerow([
-                row.get("month"),
-                row.get("opening_balance"),
-                row.get("savings_collections"),
-                row.get("loan_repayments"),
-                row.get("inflow"),
-                row.get("loan_disbursed"),
-                row.get("expenses"),
-                row.get("outflow"),
-                row.get("net"),
-                row.get("closing_balance"),
-            ])
+            rows.append({
+                "Month": row.get("month"),
+                "Opening Balance": row.get("opening_balance"),
+                "Savings Collections": row.get("savings_collections"),
+                "Loan Repayments": row.get("loan_repayments"),
+                "Total Inflow": row.get("inflow"),
+                "Loans Disbursed": row.get("loan_disbursed"),
+                "Expenses": row.get("expenses"),
+                "Total Outflow": row.get("outflow"),
+                "Net Movement": row.get("net"),
+                "Closing Balance": row.get("closing_balance"),
+            })
     elif report_type == "members":
-        writer.writerow(["ID","Name","Phone","Email","National ID","Status","Joined","Savings"])
-        rows = db.execute("SELECT id,name,phone,email,national_id,status,joined_date,savings FROM members WHERE member_type='member'").fetchall()
-        for r in rows: writer.writerow(list(r))
+        headers = ["ID","Name","Phone","Email","National ID","Status","Joined","Savings"]
+        rows = rows_to_list(db.execute("SELECT id,name,phone,email,national_id,status,joined_date,savings FROM members WHERE member_type='member'").fetchall())
     else:
         db.close(); return error("Unknown report type")
+
+    # CSV output is the default and remains backward-compatible.
+    if export_format not in ("csv", "xlsx"):
+        db.close()
+        return error("Unsupported export format. Use csv or xlsx.")
 
     db.close()
     from flask import Response
     audit(f"Exported {report_type} report", "Reports")
+    if export_format == "xlsx":
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill
+        except Exception:
+            return error("Excel export dependency missing. Install openpyxl.")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = (report_type or "report")[:31]
+        ws.append(headers)
+        header_fill = PatternFill(start_color="E5EEF9", end_color="E5EEF9", fill_type="solid")
+        for idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=idx)
+            cell.font = Font(bold=True)
+            cell.fill = header_fill
+
+        for row in rows:
+            if isinstance(row, dict):
+                ws.append([row.get(h) for h in headers])
+            else:
+                ws.append(list(row))
+
+        # Set readable default widths.
+        for col in ws.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=10)
+            ws.column_dimensions[col[0].column_letter].width = min(42, max(12, max_len + 2))
+
+        stream = BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+        return send_file(
+            stream,
+            as_attachment=True,
+            download_name=f"{report_type}-report.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow([row.get(h) for h in headers] if isinstance(row, dict) else list(row))
     return Response(
         output.getvalue(),
         mimetype="text/csv",
@@ -2155,8 +2314,9 @@ def create_user():
     if not all(d.get(k) for k in ("name","username","password","role")):
         return error("name, username, password, role required")
     username = d["username"].strip().lower()
-    if len(d["password"]) < 4:
-        return error("Password must be at least 4 characters")
+    pwd_err = validate_password_strength(d["password"])
+    if pwd_err:
+        return error(pwd_err)
     email = (d.get("email") or f"{username}@local.sacco").strip().lower()
     db = get_db()
     try:
@@ -2186,8 +2346,9 @@ def update_user(user_id):
         db.close(); return error("User not found", 404)
     try:
         if d.get("password"):
-            if len(d["password"]) < 4:
-                db.close(); return error("Password must be at least 4 characters")
+            pwd_err = validate_password_strength(d["password"])
+            if pwd_err:
+                db.close(); return error(pwd_err)
             db.execute(
                 "UPDATE users SET name=?, username=?, email=?, password=?, role=?, active=? WHERE id=?",
                 (d["name"].strip(), username, email, hash_password(d["password"]), d["role"], int(d.get("active", user["active"])), user_id)
@@ -2227,8 +2388,9 @@ def update_user_status(user_id):
 def reset_user_password(user_id):
     d = request.json or {}
     new_password = d.get("password", "")
-    if len(new_password) < 4:
-        return error("Password must be at least 4 characters")
+    pwd_err = validate_password_strength(new_password)
+    if pwd_err:
+        return error(pwd_err)
     db = get_db()
     user = row_to_dict(db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone())
     if not user:

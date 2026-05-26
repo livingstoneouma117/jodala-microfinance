@@ -23,6 +23,7 @@ Jodala Microfinance LMS is a Flask + SQLite web app used to manage members, borr
 - `database.py`: schema creation, migrations, bootstrap helpers
 - `calculator.py`: loan schedule and summary calculations
 - `index.html`: frontend UI and client-side logic
+- `frontend/`: React componentized migration (`Dashboard`, `LoanForm`, `LoanList`, `MemberTable`)
 - `requirements.txt`: Python dependencies
 - `render.yaml`: Render deployment config
 
@@ -35,6 +36,21 @@ Jodala Microfinance LMS is a Flask + SQLite web app used to manage members, borr
 6. `python app.py`
 
 Open `http://localhost:5000`.
+
+## Frontend Modernization (v3 React)
+The existing UI at `/` remains active while migration happens in `/v3`.
+
+1. `cd frontend`
+2. `npm install`
+3. `npm run build`
+4. Start Flask (`python app.py`)
+5. Open `http://localhost:5000/v3`
+
+For local React development with hot reload:
+1. `cd frontend`
+2. `npm install`
+3. `npm run dev`
+4. Keep Flask running on `http://localhost:5000` for API proxy calls.
 
 ## Local Setup (Linux/macOS)
 1. `cd /path/to/jodala chama`

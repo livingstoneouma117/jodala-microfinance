@@ -35,5 +35,11 @@ services:
         value: HS256
       - key: JWT_EXP_HOURS
         value: "24"
+      - key: LOGIN_MAX_ATTEMPTS
+        value: "5"
+      - key: LOGIN_WINDOW_SECONDS
+        value: "600"
+      - key: LOGIN_BLOCK_SECONDS
+        value: "900"
       - key: SECRET_KEY
         generateValue: true

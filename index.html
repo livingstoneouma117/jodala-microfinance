@@ -4,7 +4,18 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Jodala Microfinance</title>
-<link rel="icon" type="image/x-icon" href="/favicon.ico?v=2"/>
+<meta name="theme-color" content="#0f766e"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Jodala"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="msapplication-TileColor" content="#0f766e"/>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<link rel="icon" type="image/x-icon" href="/favicon.ico?v=3"/>
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"/>
+<link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png"/>
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"/>
 <style>
@@ -2797,6 +2808,13 @@ function renderPagination(containerId,pages,current,onPage){
 initTheme();
 loadSettings();
 tryAutoLogin();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>

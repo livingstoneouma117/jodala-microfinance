@@ -1,19 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { ROLES, ROLE_PERMISSIONS, roleLabel } from "../lib/access";
 import { formatDate } from "../lib/format";
 import DataTable from "../components/ui/DataTable";
 import { useToast } from "../components/ui/Toast";
-
-const ROLES = [
-  { value: "admin", label: "Admin" },
-  { value: "officer", label: "Loan Officer" },
-  { value: "accountant", label: "Accountant" },
-  { value: "cashier", label: "Cashier" },
-];
-
-function roleLabel(role) {
-  return ROLES.find((item) => item.value === role)?.label || role || "-";
-}
 
 function UserRolesPage() {
   const [users, setUsers] = useState([]);
@@ -117,8 +107,27 @@ function UserRolesPage() {
     <div className="stack">
       <header className="page-head">
         <h2>Users & Roles</h2>
-        <p>Assign staff roles for admin, loan officer, accountant, and cashier access.</p>
+        <p>Admins can assign staff roles. Each role controls which areas of the system a user can access.</p>
       </header>
+
+      <section className="panel stack">
+        <div className="row-between">
+          <h3>Role-Based Access</h3>
+          <span className="muted">Only admins can change user roles.</span>
+        </div>
+        <div className="role-grid">
+          {ROLES.map((role) => (
+            <article className="role-card" key={role.value}>
+              <span className={`role-pill role-${role.value}`}>{role.label}</span>
+              <ul>
+                {(ROLE_PERMISSIONS[role.value] || []).map((permission) => (
+                  <li key={permission}>{permission}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </section>
 
       {error ? <p className="error-box">{error}</p> : null}
 

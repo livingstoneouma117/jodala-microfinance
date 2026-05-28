@@ -1332,8 +1332,21 @@ function tryAutoLogin(){
 // ── Navigation ───────────────────────────────────────────────────────────────
 const PAGE_TITLES = {dashboard:'Dashboard',members:'Members',borrowers:'External Borrowers',loans:'Loans',savings:'Savings',
   expenses:'Expenses',repayments:'Repayments',reports:'Reports',notifications:'Notifications',audit:'Audit Log',users:'User Management',settings:'Settings'};
+const PAGE_ROLES = {users:['admin']};
+
+function hasPageAccess(page){
+  const roles=PAGE_ROLES[page];
+  return !roles || roles.includes(currentUser?.role);
+}
+
+function requireAdminAccess(action='manage users'){
+  if(currentUser?.role==='admin')return true;
+  toast(`Only admins can ${action}.`,'error');
+  return false;
+}
 
 function navigate(page){
+  if(!hasPageAccess(page)){toast('Only admins can access User Management.','error');page='dashboard';}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page)?.classList.add('active');
@@ -2602,6 +2615,7 @@ async function loadAuditLogs(){
 
 // ── USERS ────────────────────────────────────────────────────────────────────
 async function loadUsers(){
+  if(!requireAdminAccess('manage users')){navigate('dashboard');return}
   try{
     const res=await api('/users');
     if(!res?.success)return;
@@ -2625,6 +2639,7 @@ async function loadUsers(){
 }
 
 function openUserModal(user=null){
+  if(!requireAdminAccess('manage users'))return;
   ['u-id','u-name','u-username','u-email','u-pass'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('u-role').value='cashier';
   document.querySelector('#user-modal .modal-title').textContent=user?'Edit System User':'Add System User';
@@ -2640,6 +2655,7 @@ function openUserModal(user=null){
 }
 
 async function submitUser(){
+  if(!requireAdminAccess('manage users'))return;
   const id=document.getElementById('u-id').value;
   const password=document.getElementById('u-pass').value;
   const data={name:document.getElementById('u-name').value,username:document.getElementById('u-username').value,email:document.getElementById('u-email').value,
@@ -2658,6 +2674,7 @@ async function submitUser(){
 }
 
 async function resetUserPassword(id){
+  if(!requireAdminAccess('reset user passwords'))return;
   const password=prompt('Enter the new password');
   if(!password)return;
   const pwdErr=passwordPolicyError(password);
@@ -2669,6 +2686,7 @@ async function resetUserPassword(id){
 }
 
 async function toggleUserActive(id,active){
+  if(!requireAdminAccess('activate or deactivate users'))return;
   try{
     const res=await api(`/users/${id}/status`,{method:'PATCH',body:JSON.stringify({active:!!active})});
     if(res?.success){toast(active?'User activated':'User deactivated');loadUsers();}
@@ -2676,6 +2694,7 @@ async function toggleUserActive(id,active){
 }
 
 async function deleteUser(id){
+  if(!requireAdminAccess('delete users'))return;
   if(!confirm('Permanently delete this user account?'))return;
   try{
     const res=await api(`/users/${id}`,{method:'DELETE'});

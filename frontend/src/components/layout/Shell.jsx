@@ -1,6 +1,20 @@
 import { NavLink } from "react-router-dom";
+import { canAccess, roleLabel } from "../../lib/access";
 
-function Shell({ children, onLogout }) {
+const NAV_ITEMS = [
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/loans", label: "Loans" },
+  { to: "/members", label: "Members" },
+  { to: "/savings", label: "Savings" },
+  { to: "/repayments", label: "Repayments" },
+  { to: "/reports", label: "Reports" },
+  { to: "/settings", label: "Settings" },
+  { to: "/users", label: "Users & Roles", roles: ["admin"] },
+];
+
+function Shell({ children, onLogout, user }) {
+  const visibleItems = NAV_ITEMS.filter((item) => canAccess(user?.role, item.roles));
+
   return (
     <div className="app-shell">
       <aside className="side-nav">
@@ -12,15 +26,19 @@ function Shell({ children, onLogout }) {
           </div>
         </div>
 
+        {user ? (
+          <div className="signed-user">
+            <span>{user.name}</span>
+            <strong className={`role-pill role-${user.role}`}>{roleLabel(user.role)}</strong>
+          </div>
+        ) : null}
+
         <nav>
-          <NavLink to="/dashboard" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Dashboard</NavLink>
-          <NavLink to="/loans" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Loans</NavLink>
-          <NavLink to="/members" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Members</NavLink>
-          <NavLink to="/savings" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Savings</NavLink>
-          <NavLink to="/repayments" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Repayments</NavLink>
-          <NavLink to="/reports" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Reports</NavLink>
-          <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Settings</NavLink>
-          <NavLink to="/users" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Users & Roles</NavLink>
+          {visibleItems.map((item) => (
+            <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
 
         <button type="button" className="ghost-btn" onClick={onLogout}>Logout</button>

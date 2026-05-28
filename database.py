@@ -42,6 +42,7 @@ def init_db():
         email       TEXT UNIQUE NOT NULL,
         password    TEXT NOT NULL,
         role        TEXT NOT NULL DEFAULT 'cashier',
+        permissions TEXT NOT NULL DEFAULT '[]',
         active      INTEGER NOT NULL DEFAULT 1,
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     )""")
@@ -494,8 +495,8 @@ def _ensure_bootstrap_admin(conn):
         email = f"{username}@local.sacco"
 
     c.execute(
-        "INSERT INTO users (name,username,email,password,role,active) VALUES (?,?,?,?,?,1)",
-        (name, username, email, hash_password(password), role),
+        "INSERT INTO users (name,username,email,password,role,permissions,active) VALUES (?,?,?,?,?,?,1)",
+        (name, username, email, hash_password(password), role, "[]"),
     )
 
     conn.commit()
@@ -526,6 +527,11 @@ def _migrate_schema(c):
     if "username" not in user_cols:
         c.execute("ALTER TABLE users ADD COLUMN username TEXT")
         c.execute("UPDATE users SET username=lower(substr(email,1,instr(email,'@')-1)) WHERE username IS NULL")
+    if "permissions" not in user_cols:
+        c.execute("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'")
+        c.execute("UPDATE users SET permissions='[]' WHERE permissions IS NULL OR TRIM(permissions)=''")
+    else:
+        c.execute("UPDATE users SET permissions='[]' WHERE permissions IS NULL OR TRIM(permissions)=''")
 
     member_cols = {row[1] for row in c.execute("PRAGMA table_info(members)").fetchall()}
     if "member_type" not in member_cols:

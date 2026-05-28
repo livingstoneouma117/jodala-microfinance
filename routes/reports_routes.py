@@ -1,0 +1,217 @@
+from flask import Blueprint
+
+from services.common import *
+
+reports_bp = Blueprint("reports", __name__)
+bp = reports_bp
+
+@bp.route("/api/reports/portfolio", methods=["GET"])
+@login_required
+def report_portfolio():
+    db = get_db()
+    refresh_loan_statuses(db)
+    db.commit()
+    rows = rows_to_list(db.execute(
+        """SELECT l.*, m.name as member_name,
+           COALESCE(risk.total_repayable, l.amount) as total_repayable,
+           MAX(COALESCE(risk.total_repayable, l.amount) - l.total_paid, 0) as outstanding,
+           COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
+           COALESCE(risk.overdue_installments,0) as overdue_installments,
+           COALESCE(CAST(julianday(date('now')) - julianday(risk.oldest_due_date) AS INTEGER),0) as days_in_arrears,
+           risk.next_due_date
+           FROM loans l
+           JOIN members m ON l.member_id=m.id
+           LEFT JOIN (
+             SELECT loan_id,
+                    SUM(repayment) as total_repayable,
+                    MIN(CASE WHEN paid=0 THEN due_date END) as next_due_date,
+                    MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END) as oldest_due_date,
+                    SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment ELSE 0 END) as amount_in_arrears,
+                    COUNT(CASE WHEN paid=0 AND due_date < date('now') THEN 1 END) as overdue_installments
+             FROM loan_schedule
+             GROUP BY loan_id
+           ) risk ON risk.loan_id=l.id
+           ORDER BY l.disbursed_date DESC"""
+    ).fetchall())
+    totals = db.execute(
+        """SELECT
+           COALESCE(SUM(amount),0) as total_disbursed,
+           COALESCE(SUM(total_paid),0) as total_repaid,
+           COALESCE(SUM(total_repayable),0) as total_repayable,
+           COALESCE(SUM(MAX(total_repayable - total_paid, 0)),0) as total_outstanding,
+           COALESCE(SUM(amount_in_arrears),0) as amount_in_arrears,
+           COALESCE(SUM(CASE WHEN days_in_arrears >= 30 THEN MAX(total_repayable - total_paid, 0) ELSE 0 END),0) as par30_amount,
+           COALESCE(SUM(penalties),0) as total_penalties,
+           COUNT(*) as total_loans
+           FROM (
+               SELECT l.id, l.amount, l.total_paid, l.penalties, l.disbursed_date,
+                       COALESCE(risk.total_repayable, l.amount) as total_repayable,
+                       COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
+                       risk.days_in_arrears
+               FROM loans l
+               LEFT JOIN (
+                 SELECT loan_id,
+                        SUM(repayment) as total_repayable,
+                        SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment ELSE 0 END) as amount_in_arrears,
+                        CAST(julianday(date('now')) - julianday(MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END)) AS INTEGER) as days_in_arrears
+                 FROM loan_schedule
+                 GROUP BY loan_id
+               ) risk ON risk.loan_id=l.id
+               WHERE l.disbursed_date IS NOT NULL
+           )"""
+    ).fetchone()
+    db.close()
+    return success({"loans": rows, "totals": dict(totals)})
+
+
+
+@bp.route("/api/reports/savings", methods=["GET"])
+@login_required
+def report_savings():
+    db = get_db()
+    rows = rows_to_list(db.execute(
+        """SELECT m.id, m.name, m.status, sa.balance,
+           COALESCE(SUM(CASE WHEN st.type='deposit' THEN st.amount ELSE 0 END),0) as total_deposits,
+           COALESCE(SUM(CASE WHEN st.type='withdrawal' THEN st.amount ELSE 0 END),0) as total_withdrawals
+           FROM members m
+           LEFT JOIN savings_accounts sa ON m.id=sa.member_id
+           LEFT JOIN savings_transactions st ON m.id=st.member_id
+           WHERE m.member_type='member'
+           GROUP BY m.id ORDER BY sa.balance DESC"""
+    ).fetchall())
+    db.close()
+    return success(rows)
+
+
+
+@bp.route("/api/reports/account-monthly", methods=["GET"])
+@login_required
+def report_account_monthly():
+    db = get_db()
+    data = build_monthly_account_report(db)
+    db.close()
+    return success(data)
+
+
+
+@bp.route("/api/reports/export/<report_type>", methods=["GET"])
+@login_required
+def export_report(report_type):
+    import csv, io
+    db = get_db()
+    export_format = (request.args.get("format") or "csv").strip().lower()
+    rows = []
+    headers = []
+
+    if report_type == "loans":
+        headers = ["ID","Member","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"]
+        rows = rows_to_list(db.execute(
+            """SELECT l.id,m.name,l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
+                      (COALESCE(SUM(s.repayment), l.amount)-l.total_paid) as outstanding,l.penalties
+               FROM loans l
+               JOIN members m ON l.member_id=m.id
+               LEFT JOIN loan_schedule s ON s.loan_id=l.id
+               GROUP BY l.id"""
+        ).fetchall())
+    elif report_type == "repayments":
+        headers = ["ID","Loan","Member","Amount","Date","Method","Reference","Type"]
+        rows = rows_to_list(db.execute(
+            "SELECT r.id,r.loan_id,m.name,r.amount,r.payment_date,r.method,r.reference,r.type FROM repayments r JOIN members m ON r.member_id=m.id ORDER BY r.payment_date DESC"
+        ).fetchall())
+    elif report_type == "savings":
+        headers = ["Member ID","Member","Balance","Status"]
+        rows = rows_to_list(db.execute(
+            "SELECT m.id,m.name,sa.balance,m.status FROM members m LEFT JOIN savings_accounts sa ON m.id=sa.member_id WHERE m.member_type='member' ORDER BY sa.balance DESC"
+        ).fetchall())
+    elif report_type == "expenses":
+        headers = ["ID","Date","Account","Account Code","Amount","Payee","Reference","Notes","Recorded By"]
+        rows = rows_to_list(db.execute(
+            """SELECT et.id, et.expense_date, ea.name, ea.code, et.amount, et.payee, et.reference, et.notes, u.name
+               FROM expense_transactions et
+               JOIN expense_accounts ea ON et.account_id=ea.id
+               LEFT JOIN users u ON et.recorded_by=u.id
+               ORDER BY et.expense_date DESC, et.created_at DESC"""
+        ).fetchall())
+    elif report_type == "account-monthly":
+        headers = ["Month","Opening Balance","Savings Collections","Loan Repayments","Total Inflow","Loans Disbursed","Expenses","Total Outflow","Net Movement","Closing Balance"]
+        data = build_monthly_account_report(db)
+        for row in data.get("months", []):
+            rows.append({
+                "Month": row.get("month"),
+                "Opening Balance": row.get("opening_balance"),
+                "Savings Collections": row.get("savings_collections"),
+                "Loan Repayments": row.get("loan_repayments"),
+                "Total Inflow": row.get("inflow"),
+                "Loans Disbursed": row.get("loan_disbursed"),
+                "Expenses": row.get("expenses"),
+                "Total Outflow": row.get("outflow"),
+                "Net Movement": row.get("net"),
+                "Closing Balance": row.get("closing_balance"),
+            })
+    elif report_type == "members":
+        headers = ["ID","Name","Phone","Email","National ID","Status","Joined","Savings"]
+        rows = rows_to_list(db.execute("SELECT id,name,phone,email,national_id,status,joined_date,savings FROM members WHERE member_type='member'").fetchall())
+    else:
+        db.close(); return error("Unknown report type")
+
+    # CSV output is the default and remains backward-compatible.
+    if export_format not in ("csv", "xlsx"):
+        db.close()
+        return error("Unsupported export format. Use csv or xlsx.")
+
+    db.close()
+    from flask import Response
+    audit(f"Exported {report_type} report", "Reports")
+    if export_format == "xlsx":
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill
+        except Exception:
+            return error("Excel export dependency missing. Install openpyxl.")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = (report_type or "report")[:31]
+        ws.append(headers)
+        header_fill = PatternFill(start_color="E5EEF9", end_color="E5EEF9", fill_type="solid")
+        for idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=idx)
+            cell.font = Font(bold=True)
+            cell.fill = header_fill
+
+        for row in rows:
+            if isinstance(row, dict):
+                ws.append([row.get(h) for h in headers])
+            else:
+                ws.append(list(row))
+
+        # Set readable default widths.
+        for col in ws.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=10)
+            ws.column_dimensions[col[0].column_letter].width = min(42, max(12, max_len + 2))
+
+        stream = BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+        return send_file(
+            stream,
+            as_attachment=True,
+            download_name=f"{report_type}-report.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow([row.get(h) for h in headers] if isinstance(row, dict) else list(row))
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment;filename={report_type}-report.csv"}
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ACCOUNTING
+# ══════════════════════════════════════════════════════════════════════════════

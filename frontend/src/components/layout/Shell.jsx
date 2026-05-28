@@ -3,17 +3,18 @@ import { canAccess, roleLabel } from "../../lib/access";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
-  { to: "/loans", label: "Loans" },
-  { to: "/members", label: "Members" },
-  { to: "/savings", label: "Savings" },
-  { to: "/repayments", label: "Repayments" },
-  { to: "/reports", label: "Reports" },
-  { to: "/settings", label: "Settings" },
+  { to: "/loans", label: "Loans", roles: ["admin", "officer", "accountant"], permissions: ["loans"] },
+  { to: "/members", label: "Members", roles: ["admin", "officer"], permissions: ["members"] },
+  { to: "/savings", label: "Savings", roles: ["admin", "officer", "cashier", "accountant"], permissions: ["savings"] },
+  { to: "/expenses", label: "Expenses", roles: ["admin", "accountant"], permissions: ["expenses"] },
+  { to: "/repayments", label: "Repayments", roles: ["admin", "officer", "cashier"], permissions: ["repayments"] },
+  { to: "/reports", label: "Reports", roles: ["admin", "accountant"], permissions: ["reports"] },
+  { to: "/settings", label: "Settings", roles: ["admin", "accountant"], permissions: ["settings"] },
   { to: "/users", label: "Users & Roles", roles: ["admin"] },
 ];
 
 function Shell({ children, onLogout, user }) {
-  const visibleItems = NAV_ITEMS.filter((item) => canAccess(user?.role, item.roles));
+  const visibleItems = NAV_ITEMS.filter((item) => canAccess(user, item.roles, item.permissions));
 
   return (
     <div className="app-shell">

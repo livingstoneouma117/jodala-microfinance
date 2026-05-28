@@ -730,6 +730,68 @@ td {
   gap: 16px;
 }
 
+.permission-summary {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.permission-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(29, 78, 216, 0.1);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.permission-card,
+.permission-select {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.permission-card strong,
+.permission-select strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.permission-card p,
+.permission-select small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.permission-select {
+  cursor: pointer;
+}
+
+.permission-select input[type="checkbox"] {
+  margin-top: 2px;
+}
+
+.checkbox-field {
+  justify-content: space-between;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
 .eyebrow {
   display: block;
   margin-bottom: 6px;

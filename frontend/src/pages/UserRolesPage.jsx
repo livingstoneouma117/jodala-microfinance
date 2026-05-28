@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../lib/api";
-import { ROLES, ROLE_PERMISSIONS, roleLabel } from "../lib/access";
+import { AVAILABLE_PERMISSIONS, ROLE_PERMISSIONS, ROLES, permissionLabel, roleLabel } from "../lib/access";
 import { formatDate } from "../lib/format";
 import DataTable from "../components/ui/DataTable";
+import Modal from "../components/ui/Modal";
 import { useToast } from "../components/ui/Toast";
 
 function UserRolesPage() {
   const [users, setUsers] = useState([]);
-  const [draftRoles, setDraftRoles] = useState({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [draftAccess, setDraftAccess] = useState({
+    role: "cashier",
+    permissions: [],
+    active: true,
+  });
   const [error, setError] = useState("");
+
   const pushToast = useToast();
 
   async function loadUsers() {
@@ -18,9 +25,7 @@ function UserRolesPage() {
     setError("");
     try {
       const res = await apiFetch("/api/users");
-      const list = res?.data || [];
-      setUsers(list);
-      setDraftRoles(Object.fromEntries(list.map((user) => [user.id, user.role])));
+      setUsers(res?.data || []);
     } catch (err) {
       setError(err.message || "Failed to load users");
     } finally {
@@ -32,24 +37,56 @@ function UserRolesPage() {
     loadUsers();
   }, []);
 
-  async function assignRole(user) {
-    const nextRole = draftRoles[user.id];
-    if (!nextRole || nextRole === user.role) {
-      return;
-    }
+  function openAccessEditor(user) {
+    setEditingUser(user);
+    setDraftAccess({
+      role: user.role || "cashier",
+      permissions: Array.isArray(user.permissions) ? [...user.permissions] : [],
+      active: Boolean(user.active),
+    });
+  }
 
-    setSavingId(user.id);
+  function closeAccessEditor() {
+    setEditingUser(null);
+    setDraftAccess({ role: "cashier", permissions: [], active: true });
+  }
+
+  function togglePermission(permission) {
+    setDraftAccess((prev) => {
+      const permissions = new Set(prev.permissions || []);
+      if (permissions.has(permission)) {
+        permissions.delete(permission);
+      } else {
+        permissions.add(permission);
+      }
+      return { ...prev, permissions: [...permissions] };
+    });
+  }
+
+  async function saveAccess(event) {
+    event.preventDefault();
+    if (!editingUser) return;
+
+    setSavingId(editingUser.id);
     try {
-      const res = await apiFetch(`/api/users/${user.id}/role`, {
-        method: "PATCH",
-        body: JSON.stringify({ role: nextRole }),
+      const res = await apiFetch(`/api/users/${editingUser.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: editingUser.name,
+          username: editingUser.username,
+          email: editingUser.email,
+          role: draftAccess.role,
+          permissions: draftAccess.permissions,
+          active: draftAccess.active,
+        }),
       });
-      const updated = res?.data;
-      setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, role: updated?.role || nextRole } : item)));
-      pushToast(`${user.name} is now ${roleLabel(nextRole)}.`, "success");
+
+      const updated = res?.data || {};
+      setUsers((prev) => prev.map((user) => (user.id === editingUser.id ? { ...user, ...updated } : user)));
+      pushToast(`${editingUser.name} access updated.`, "success");
+      closeAccessEditor();
     } catch (err) {
-      pushToast(err.message || "Could not assign role", "error");
-      setDraftRoles((prev) => ({ ...prev, [user.id]: user.role }));
+      pushToast(err.message || "Could not update access", "error");
     } finally {
       setSavingId(null);
     }
@@ -67,53 +104,53 @@ function UserRolesPage() {
           </>
         ),
       },
-      { key: "email", label: "Email" },
       {
         key: "role",
-        label: "Current Role",
+        label: "Role",
         render: (row) => <span className={`role-pill role-${row.role}`}>{roleLabel(row.role)}</span>,
       },
       {
-        key: "assign",
-        label: "Assign Role",
-        render: (row) => (
-          <div className="table-actions">
-            <select
-              value={draftRoles[row.id] || row.role}
-              onChange={(event) => setDraftRoles((prev) => ({ ...prev, [row.id]: event.target.value }))}
-            >
-              {ROLES.map((role) => (
-                <option key={role.value} value={role.value}>{role.label}</option>
+        key: "permissions",
+        label: "Extra Access",
+        render: (row) =>
+          Array.isArray(row.permissions) && row.permissions.length > 0 ? (
+            <div className="permission-summary">
+              {row.permissions.map((permission) => (
+                <span key={permission} className="permission-chip">
+                  {permissionLabel(permission)}
+                </span>
               ))}
-            </select>
-            <button
-              type="button"
-              className="primary-btn"
-              disabled={savingId === row.id || (draftRoles[row.id] || row.role) === row.role}
-              onClick={() => assignRole(row)}
-            >
-              {savingId === row.id ? "Saving..." : "Assign"}
-            </button>
-          </div>
-        ),
+            </div>
+          ) : (
+            <span className="muted">No custom permissions</span>
+          ),
       },
       { key: "active", label: "Status", render: (row) => (row.active ? "Active" : "Inactive") },
       { key: "created_at", label: "Created", render: (row) => formatDate(row.created_at) },
+      {
+        key: "actions",
+        label: "Actions",
+        render: (row) => (
+          <button type="button" className="ghost-btn" onClick={() => openAccessEditor(row)}>
+            Edit Access
+          </button>
+        ),
+      },
     ],
-    [draftRoles, savingId]
+    []
   );
 
   return (
     <div className="stack">
       <header className="page-head">
         <h2>Users & Roles</h2>
-        <p>Admins can assign staff roles. Each role controls which areas of the system a user can access.</p>
+        <p>Admins can assign a base role and add extra capabilities on top of it.</p>
       </header>
 
       <section className="panel stack">
         <div className="row-between">
-          <h3>Role-Based Access</h3>
-          <span className="muted">Only admins can change user roles.</span>
+          <h3>Role Baselines</h3>
+          <span className="muted">Roles stay the default access layer. Permissions add extra modules when needed.</span>
         </div>
         <div className="role-grid">
           {ROLES.map((role) => (
@@ -129,24 +166,101 @@ function UserRolesPage() {
         </div>
       </section>
 
+      <section className="panel stack">
+        <div className="row-between">
+          <h3>Permission Catalog</h3>
+          <span className="muted">Use these permissions to extend a user beyond their role.</span>
+        </div>
+        <div className="permission-grid">
+          {AVAILABLE_PERMISSIONS.map((permission) => (
+            <article className="permission-card" key={permission.value}>
+              <strong>{permission.label}</strong>
+              <p>{permission.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       {error ? <p className="error-box">{error}</p> : null}
 
       <section className="panel stack">
         <div className="row-between">
-          <h3>Role Assignment</h3>
+          <h3>Users</h3>
           <button type="button" className="ghost-btn" onClick={loadUsers} disabled={loading}>
             Refresh
           </button>
         </div>
 
-        <DataTable
-          columns={columns}
-          rows={users}
-          rowKey="id"
-          loading={loading}
-          emptyMessage="No users found."
-        />
+        <DataTable columns={columns} rows={users} rowKey="id" loading={loading} emptyMessage="No users found." />
       </section>
+
+      <Modal
+        open={Boolean(editingUser)}
+        title={editingUser ? `Edit Access: ${editingUser.name}` : "Edit Access"}
+        onClose={closeAccessEditor}
+        maxWidth="760px"
+      >
+        <form className="stack" onSubmit={saveAccess}>
+          <div className="two-col">
+            <label>
+              Role
+              <select
+                value={draftAccess.role}
+                onChange={(event) => setDraftAccess((prev) => ({ ...prev, role: event.target.value }))}
+              >
+                {ROLES.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="checkbox-field">
+              Active
+              <span className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={draftAccess.active}
+                  onChange={(event) => setDraftAccess((prev) => ({ ...prev, active: event.target.checked }))}
+                />
+                <span>{draftAccess.active ? "Enabled" : "Disabled"}</span>
+              </span>
+            </label>
+          </div>
+
+          <div className="stack">
+            <div className="row-between">
+              <h4>Extra Permissions</h4>
+              <span className="muted">Checked items add access beyond the selected role.</span>
+            </div>
+            <div className="permission-grid">
+              {AVAILABLE_PERMISSIONS.map((permission) => {
+                const checked = draftAccess.permissions.includes(permission.value);
+                return (
+                  <label className="permission-select" key={permission.value}>
+                    <span className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePermission(permission.value)}
+                      />
+                      <span>
+                        <strong>{permission.label}</strong>
+                        <small>{permission.description}</small>
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <button type="submit" className="primary-btn" disabled={savingId === editingUser?.id}>
+            {savingId === editingUser?.id ? "Saving..." : "Save Access"}
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }

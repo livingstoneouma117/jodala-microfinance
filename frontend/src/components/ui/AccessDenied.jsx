@@ -1,13 +1,15 @@
-import { roleLabel } from "../../lib/access";
+import { permissionLabel, roleLabel } from "../../lib/access";
 
-function AccessDenied({ user, allowedRoles = [] }) {
-  const required = allowedRoles.length ? allowedRoles.map(roleLabel).join(", ") : "authorized staff";
+function AccessDenied({ user, allowedRoles = [], allowedPermissions = [] }) {
+  const requiredRoles = allowedRoles.length ? allowedRoles.map(roleLabel).join(", ") : "";
+  const requiredPermissions = allowedPermissions.length ? allowedPermissions.map(permissionLabel).join(", ") : "";
+  const required = [requiredRoles, requiredPermissions].filter(Boolean).join(" or ") || "authorized staff";
 
   return (
     <div className="stack">
       <header className="page-head">
         <h2>Access Denied</h2>
-        <p>Your current role does not allow this action.</p>
+        <p>Your current role or permissions do not allow this action.</p>
       </header>
 
       <section className="panel access-panel">

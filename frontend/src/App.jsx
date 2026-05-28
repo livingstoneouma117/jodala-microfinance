@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import LoansPage from "./pages/LoansPage";
 import MembersPage from "./pages/MembersPage";
 import SavingsPage from "./pages/SavingsPage";
+import ExpensesPage from "./pages/ExpensesPage";
 import RepaymentsPage from "./pages/RepaymentsPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -26,9 +27,9 @@ function LoadingShell() {
   );
 }
 
-function RequireRole({ user, roles, children }) {
-  if (!canAccess(user?.role, roles)) {
-    return <AccessDenied user={user} allowedRoles={roles} />;
+function RequireAccess({ user, roles = [], permissions = [], children }) {
+  if (!canAccess(user, roles, permissions)) {
+    return <AccessDenied user={user} allowedRoles={roles} allowedPermissions={permissions} />;
   }
   return children;
 }
@@ -37,7 +38,10 @@ function App() {
   const [token, setSessionToken] = useState(getToken());
   const [user, setUser] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(Boolean(token));
-  const session = useMemo(() => ({ token, setSessionToken, user, role: user?.role || "" }), [token, user]);
+  const session = useMemo(
+    () => ({ token, setSessionToken, user, role: user?.role || "", permissions: user?.permissions || [] }),
+    [token, user]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -87,19 +91,76 @@ function App() {
         <Shell user={user} onLogout={handleLogout}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage session={session} />} />
-            <Route path="/loans" element={<LoansPage session={session} />} />
-            <Route path="/members" element={<MembersPage session={session} />} />
-            <Route path="/savings" element={<SavingsPage session={session} />} />
-            <Route path="/repayments" element={<RepaymentsPage session={session} />} />
-            <Route path="/reports" element={<ReportsPage session={session} />} />
-            <Route path="/settings" element={<SettingsPage session={session} />} />
+            <Route
+              path="/dashboard"
+              element={(
+                <RequireAccess user={user}>
+                  <DashboardPage session={session} />
+                </RequireAccess>
+              )}
+            />
+            <Route
+              path="/loans"
+              element={(
+                <RequireAccess user={user} roles={["admin", "officer", "accountant"]} permissions={["loans"]}>
+                  <LoansPage session={session} />
+                </RequireAccess>
+              )}
+            />
+            <Route
+              path="/members"
+              element={(
+                <RequireAccess user={user} roles={["admin", "officer"]} permissions={["members"]}>
+                  <MembersPage session={session} />
+                </RequireAccess>
+              )}
+            />
+            <Route
+              path="/savings"
+              element={(
+                <RequireAccess user={user} roles={["admin", "officer", "cashier", "accountant"]} permissions={["savings"]}>
+                  <SavingsPage session={session} />
+                </RequireAccess>
+              )}
+            />
+            <Route
+              path="/expenses"
+              element={(
+                <RequireAccess user={user} roles={["admin", "accountant"]} permissions={["expenses"]}>
+                  <ExpensesPage session={session} />
+                </RequireAccess>
+              )}
+            />
+            <Route
+              path="/repayments"
+              element={(
+                <RequireAccess user={user} roles={["admin", "officer", "cashier"]} permissions={["repayments"]}>
+                  <RepaymentsPage session={session} />
+                </RequireAccess>
+              )}
+            />
+            <Route
+              path="/reports"
+              element={(
+                <RequireAccess user={user} roles={["admin", "accountant"]} permissions={["reports"]}>
+                  <ReportsPage session={session} />
+                </RequireAccess>
+              )}
+            />
+            <Route
+              path="/settings"
+              element={(
+                <RequireAccess user={user} roles={["admin", "accountant"]} permissions={["settings"]}>
+                  <SettingsPage session={session} />
+                </RequireAccess>
+              )}
+            />
             <Route
               path="/users"
               element={(
-                <RequireRole user={user} roles={["admin"]}>
+                <RequireAccess user={user} roles={["admin"]}>
                   <UserRolesPage session={session} />
-                </RequireRole>
+                </RequireAccess>
               )}
             />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

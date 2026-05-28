@@ -324,6 +324,319 @@ def build_monthly_account_report(db) -> dict:
         "totals": totals,
     }
 
+
+ACCOUNTING_ACCOUNTS = [
+    {"code": "1000", "name": "Main Cash / Bank", "type": "asset"},
+    {"code": "1100", "name": "Loan Portfolio Receivable", "type": "asset"},
+    {"code": "2100", "name": "Member Savings Liability", "type": "liability"},
+    {"code": "3000", "name": "Opening Capital / Equity", "type": "equity"},
+    {"code": "4000", "name": "Interest Income", "type": "income"},
+    {"code": "5100", "name": "Operating Expenses", "type": "expense"},
+]
+ACCOUNT_BY_CODE = {a["code"]: a for a in ACCOUNTING_ACCOUNTS}
+
+
+def _journal_line(account_code: str, debit: float = 0, credit: float = 0) -> dict:
+    account = ACCOUNT_BY_CODE[account_code]
+    return {
+        "account_code": account_code,
+        "account_name": account["name"],
+        "account_type": account["type"],
+        "debit": round(float(debit or 0), 2),
+        "credit": round(float(credit or 0), 2),
+    }
+
+
+def _add_journal_entry(entries: list, source: str, source_id: str, entry_date: str, description: str, lines: list) -> None:
+    clean_lines = [line for line in lines if float(line.get("debit") or 0) or float(line.get("credit") or 0)]
+    if not clean_lines:
+        return
+    total_debit = round(sum(float(line["debit"] or 0) for line in clean_lines), 2)
+    total_credit = round(sum(float(line["credit"] or 0) for line in clean_lines), 2)
+    entries.append({
+        "id": f"JE{len(entries) + 1:06d}",
+        "source": source,
+        "source_id": source_id,
+        "entry_date": clean_date(entry_date),
+        "description": description,
+        "total_debit": total_debit,
+        "total_credit": total_credit,
+        "balanced": abs(total_debit - total_credit) < 0.01,
+        "lines": clean_lines,
+    })
+
+
+def _repayment_allocations(db) -> dict:
+    schedules = {}
+    for row in rows_to_list(db.execute(
+        "SELECT loan_id, installment, principal, interest FROM loan_schedule ORDER BY loan_id, installment"
+    ).fetchall()):
+        schedules.setdefault(row["loan_id"], []).append({
+            "principal_remaining": float(row.get("principal") or 0),
+            "interest_remaining": float(row.get("interest") or 0),
+        })
+
+    allocations = {}
+    repayments = rows_to_list(db.execute(
+        "SELECT id, loan_id, amount FROM repayments ORDER BY loan_id, payment_date, created_at"
+    ).fetchall())
+    for repayment in repayments:
+        remaining = float(repayment.get("amount") or 0)
+        principal = 0.0
+        interest = 0.0
+        for slot in schedules.get(repayment["loan_id"], []):
+            if remaining <= 0:
+                break
+            pay_interest = min(remaining, slot["interest_remaining"])
+            slot["interest_remaining"] -= pay_interest
+            interest += pay_interest
+            remaining -= pay_interest
+            if remaining <= 0:
+                break
+            pay_principal = min(remaining, slot["principal_remaining"])
+            slot["principal_remaining"] -= pay_principal
+            principal += pay_principal
+            remaining -= pay_principal
+        if remaining > 0:
+            principal += remaining
+        allocations[repayment["id"]] = {
+            "principal": round(principal, 2),
+            "interest": round(interest, 2),
+        }
+    return allocations
+
+
+def build_accounting_journal(db) -> list:
+    entries = []
+
+    for row in rows_to_list(db.execute(
+        """SELECT st.*, m.name AS member_name
+           FROM savings_transactions st
+           JOIN members m ON m.id=st.member_id
+           ORDER BY st.txn_date, st.created_at"""
+    ).fetchall()):
+        amount = float(row.get("amount") or 0)
+        if row.get("type") == "withdrawal":
+            _add_journal_entry(entries, "savings_withdrawal", row["id"], row["txn_date"],
+                f"Savings withdrawal - {row.get('member_name') or row['member_id']}",
+                [_journal_line("2100", debit=amount), _journal_line("1000", credit=amount)])
+        else:
+            _add_journal_entry(entries, "savings_deposit", row["id"], row["txn_date"],
+                f"Savings deposit - {row.get('member_name') or row['member_id']}",
+                [_journal_line("1000", debit=amount), _journal_line("2100", credit=amount)])
+
+    for row in rows_to_list(db.execute(
+        """SELECT l.*, m.name AS member_name
+           FROM loans l JOIN members m ON m.id=l.member_id
+           WHERE l.disbursed_date IS NOT NULL
+           ORDER BY l.disbursed_date, l.created_at"""
+    ).fetchall()):
+        amount = float(row.get("amount") or 0)
+        _add_journal_entry(entries, "loan_disbursement", row["id"], row["disbursed_date"],
+            f"Loan disbursement - {row.get('member_name') or row['member_id']}",
+            [_journal_line("1100", debit=amount), _journal_line("1000", credit=amount)])
+
+    allocations = _repayment_allocations(db)
+    for row in rows_to_list(db.execute(
+        """SELECT r.*, m.name AS member_name
+           FROM repayments r JOIN members m ON m.id=r.member_id
+           ORDER BY r.payment_date, r.created_at"""
+    ).fetchall()):
+        amount = float(row.get("amount") or 0)
+        allocation = allocations.get(row["id"], {"principal": amount, "interest": 0})
+        principal = min(amount, float(allocation.get("principal") or 0))
+        interest = max(0.0, amount - principal)
+        _add_journal_entry(entries, "loan_repayment", row["id"], row["payment_date"],
+            f"Loan repayment {row['loan_id']} - {row.get('member_name') or row['member_id']}",
+            [
+                _journal_line("1000", debit=amount),
+                _journal_line("1100", credit=principal),
+                _journal_line("4000", credit=interest),
+            ])
+
+    for row in rows_to_list(db.execute(
+        """SELECT et.*, ea.name AS account_name
+           FROM expense_transactions et
+           JOIN expense_accounts ea ON ea.id=et.account_id
+           ORDER BY et.expense_date, et.created_at"""
+    ).fetchall()):
+        amount = float(row.get("amount") or 0)
+        _add_journal_entry(entries, "expense", row["id"], row["expense_date"],
+            f"Expense - {row.get('account_name') or 'Operating expense'}",
+            [_journal_line("5100", debit=amount), _journal_line("1000", credit=amount)])
+
+    cash_delta = 0.0
+    for entry in entries:
+        for line in entry["lines"]:
+            if line["account_code"] == "1000":
+                cash_delta += float(line["debit"] or 0) - float(line["credit"] or 0)
+    current_cash = get_account_opening_balance(db)
+    opening_cash = round(current_cash - cash_delta, 2)
+    if abs(opening_cash) >= 0.01:
+        if opening_cash > 0:
+            lines = [_journal_line("1000", debit=opening_cash), _journal_line("3000", credit=opening_cash)]
+        else:
+            lines = [_journal_line("3000", debit=abs(opening_cash)), _journal_line("1000", credit=abs(opening_cash))]
+        _add_journal_entry(entries, "opening_balance", "OPENING", "1900-01-01",
+            "Opening balance brought forward", lines)
+
+    entries.sort(key=lambda e: (e["entry_date"], e["source"], e["source_id"]))
+    for idx, entry in enumerate(entries, start=1):
+        entry["id"] = f"JE{idx:06d}"
+    return entries
+
+
+def _filter_journal(entries: list, date_from: str = "", date_to: str = "", source: str = "") -> list:
+    if date_from:
+        date_from = clean_date(date_from)
+        entries = [entry for entry in entries if entry["entry_date"] >= date_from]
+    if date_to:
+        date_to = clean_date(date_to)
+        entries = [entry for entry in entries if entry["entry_date"] <= date_to]
+    if source:
+        entries = [entry for entry in entries if entry["source"] == source]
+    return entries
+
+
+def _account_balances(entries: list) -> dict:
+    balances = {
+        account["code"]: {
+            **account,
+            "debit": 0.0,
+            "credit": 0.0,
+            "net": 0.0,
+            "balance": 0.0,
+        }
+        for account in ACCOUNTING_ACCOUNTS
+    }
+    for entry in entries:
+        for line in entry["lines"]:
+            row = balances[line["account_code"]]
+            row["debit"] += float(line.get("debit") or 0)
+            row["credit"] += float(line.get("credit") or 0)
+    for row in balances.values():
+        row["debit"] = round(row["debit"], 2)
+        row["credit"] = round(row["credit"], 2)
+        row["net"] = round(row["debit"] - row["credit"], 2)
+        if row["type"] in ("asset", "expense"):
+            row["balance"] = row["net"]
+        else:
+            row["balance"] = round(row["credit"] - row["debit"], 2)
+    return balances
+
+
+def build_trial_balance(db, date_from: str = "", date_to: str = "") -> dict:
+    entries = _filter_journal(build_accounting_journal(db), date_from, date_to)
+    rows = []
+    total_debit = 0.0
+    total_credit = 0.0
+    for row in _account_balances(entries).values():
+        net = float(row["net"] or 0)
+        debit_balance = net if net > 0 else 0.0
+        credit_balance = abs(net) if net < 0 else 0.0
+        total_debit += debit_balance
+        total_credit += credit_balance
+        rows.append({**row, "debit_balance": round(debit_balance, 2), "credit_balance": round(credit_balance, 2)})
+    return {
+        "rows": rows,
+        "totals": {
+            "debit": round(total_debit, 2),
+            "credit": round(total_credit, 2),
+            "balanced": abs(total_debit - total_credit) < 0.01,
+        },
+    }
+
+
+def build_profit_loss(db, date_from: str = "", date_to: str = "") -> dict:
+    balances = _account_balances(_filter_journal(build_accounting_journal(db), date_from, date_to))
+    income_rows = [row for row in balances.values() if row["type"] == "income" and abs(row["balance"]) >= 0.01]
+    expense_rows = [row for row in balances.values() if row["type"] == "expense" and abs(row["balance"]) >= 0.01]
+    income = sum(float(row["balance"] or 0) for row in income_rows)
+    expenses = sum(float(row["balance"] or 0) for row in expense_rows)
+    return {
+        "income": income_rows,
+        "expenses": expense_rows,
+        "totals": {
+            "income": round(income, 2),
+            "expenses": round(expenses, 2),
+            "net_profit": round(income - expenses, 2),
+        },
+    }
+
+
+def build_balance_sheet(db, date_to: str = "") -> dict:
+    entries = _filter_journal(build_accounting_journal(db), "", date_to)
+    balances = _account_balances(entries)
+    assets = [row for row in balances.values() if row["type"] == "asset" and abs(row["balance"]) >= 0.01]
+    liabilities = [row for row in balances.values() if row["type"] == "liability" and abs(row["balance"]) >= 0.01]
+    equity = [row for row in balances.values() if row["type"] == "equity" and abs(row["balance"]) >= 0.01]
+    pnl = build_profit_loss(db, "", date_to)
+    retained = pnl["totals"]["net_profit"]
+    if abs(retained) >= 0.01:
+        equity.append({
+            "code": "3900",
+            "name": "Retained Earnings / Current Profit",
+            "type": "equity",
+            "debit": 0.0,
+            "credit": 0.0,
+            "net": -retained,
+            "balance": retained,
+        })
+    total_assets = sum(float(row["balance"] or 0) for row in assets)
+    total_liabilities = sum(float(row["balance"] or 0) for row in liabilities)
+    total_equity = sum(float(row["balance"] or 0) for row in equity)
+    return {
+        "assets": assets,
+        "liabilities": liabilities,
+        "equity": equity,
+        "totals": {
+            "assets": round(total_assets, 2),
+            "liabilities": round(total_liabilities, 2),
+            "equity": round(total_equity, 2),
+            "liabilities_and_equity": round(total_liabilities + total_equity, 2),
+            "balanced": abs(total_assets - (total_liabilities + total_equity)) < 0.01,
+        },
+    }
+
+
+def build_cash_flow_statement(db, date_from: str = "", date_to: str = "") -> dict:
+    entries = _filter_journal(build_accounting_journal(db), date_from, date_to)
+    by_month = {}
+    for entry in entries:
+        if entry["source"] == "opening_balance":
+            continue
+        month = entry["entry_date"][:7]
+        row = by_month.setdefault(month, {
+            "month": month,
+            "operating": 0.0,
+            "investing": 0.0,
+            "financing": 0.0,
+            "net_cash_flow": 0.0,
+        })
+        cash_line = next((line for line in entry["lines"] if line["account_code"] == "1000"), None)
+        cash_delta = float(cash_line.get("debit") or 0) - float(cash_line.get("credit") or 0) if cash_line else 0.0
+        if entry["source"] == "loan_repayment":
+            interest = sum(float(line.get("credit") or 0) for line in entry["lines"] if line["account_code"] == "4000")
+            principal = cash_delta - interest
+            row["operating"] += interest
+            row["investing"] += principal
+        elif entry["source"] == "expense":
+            row["operating"] += cash_delta
+        elif entry["source"] == "loan_disbursement":
+            row["investing"] += cash_delta
+        elif entry["source"] in ("savings_deposit", "savings_withdrawal"):
+            row["financing"] += cash_delta
+        row["net_cash_flow"] += cash_delta
+
+    rows = []
+    totals = {"operating": 0.0, "investing": 0.0, "financing": 0.0, "net_cash_flow": 0.0}
+    for row in [by_month[key] for key in sorted(by_month.keys())]:
+        for key in totals:
+            row[key] = round(row[key], 2)
+            totals[key] += row[key]
+        rows.append(row)
+    return {"months": rows, "totals": {k: round(v, 2) for k, v in totals.items()}}
+
 def pdf_escape(value) -> str:
     return str(value).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
@@ -2235,6 +2548,117 @@ def export_report(report_type):
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment;filename={report_type}-report.csv"}
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ACCOUNTING
+# ══════════════════════════════════════════════════════════════════════════════
+@app.route("/api/accounting/chart-of-accounts", methods=["GET"])
+@login_required
+def accounting_chart_of_accounts():
+    return success(ACCOUNTING_ACCOUNTS)
+
+
+@app.route("/api/accounting/journal-entries", methods=["GET"])
+@login_required
+def accounting_journal_entries():
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    source = request.args.get("source", "").strip()
+    page = max(1, int(request.args.get("page", 1)))
+    limit = int(request.args.get("limit", 15))
+    db = get_db()
+    entries = _filter_journal(build_accounting_journal(db), date_from, date_to, source)
+    db.close()
+    total = len(entries)
+    start = (page - 1) * limit
+    return success({
+        "entries": entries[start:start + limit],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": -(-total // limit) if limit else 1,
+    })
+
+
+@app.route("/api/accounting/general-ledger", methods=["GET"])
+@login_required
+def accounting_general_ledger():
+    account_code = request.args.get("account_code", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    db = get_db()
+    entries = _filter_journal(build_accounting_journal(db), date_from, date_to)
+    db.close()
+    rows = []
+    running = 0.0
+    for entry in entries:
+        for line in entry["lines"]:
+            if account_code and line["account_code"] != account_code:
+                continue
+            running += float(line.get("debit") or 0) - float(line.get("credit") or 0)
+            rows.append({
+                "entry_id": entry["id"],
+                "entry_date": entry["entry_date"],
+                "source": entry["source"],
+                "source_id": entry["source_id"],
+                "description": entry["description"],
+                **line,
+                "running_balance": round(running, 2),
+            })
+    return success({
+        "account_code": account_code,
+        "account": ACCOUNT_BY_CODE.get(account_code),
+        "lines": rows,
+    })
+
+
+@app.route("/api/accounting/trial-balance", methods=["GET"])
+@login_required
+def accounting_trial_balance():
+    db = get_db()
+    data = build_trial_balance(
+        db,
+        request.args.get("date_from", "").strip(),
+        request.args.get("date_to", "").strip(),
+    )
+    db.close()
+    return success(data)
+
+
+@app.route("/api/accounting/profit-loss", methods=["GET"])
+@login_required
+def accounting_profit_loss():
+    db = get_db()
+    data = build_profit_loss(
+        db,
+        request.args.get("date_from", "").strip(),
+        request.args.get("date_to", "").strip(),
+    )
+    db.close()
+    return success(data)
+
+
+@app.route("/api/accounting/balance-sheet", methods=["GET"])
+@login_required
+def accounting_balance_sheet():
+    db = get_db()
+    data = build_balance_sheet(db, request.args.get("date_to", "").strip())
+    db.close()
+    return success(data)
+
+
+@app.route("/api/accounting/cash-flow", methods=["GET"])
+@login_required
+def accounting_cash_flow():
+    db = get_db()
+    data = build_cash_flow_statement(
+        db,
+        request.args.get("date_from", "").strip(),
+        request.args.get("date_to", "").strip(),
+    )
+    db.close()
+    return success(data)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # NOTIFICATIONS

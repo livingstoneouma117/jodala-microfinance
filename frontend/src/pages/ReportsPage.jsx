@@ -15,10 +15,37 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function flattenFinancialRows(data, viewType) {
+  if (viewType === "profit-loss") {
+    return [
+      ...(data?.income || []).map((row) => ({ ...row, section: "Income" })),
+      ...(data?.expenses || []).map((row) => ({ ...row, section: "Expenses" })),
+      {
+        code: "NET",
+        name: "Net Profit",
+        section: "Result",
+        balance: data?.totals?.net_profit || 0,
+      },
+    ];
+  }
+
+  if (viewType === "balance-sheet") {
+    return [
+      ...(data?.assets || []).map((row) => ({ ...row, section: "Assets" })),
+      ...(data?.liabilities || []).map((row) => ({ ...row, section: "Liabilities" })),
+      ...(data?.equity || []).map((row) => ({ ...row, section: "Equity" })),
+    ];
+  }
+
+  return [];
+}
+
 function ReportsPage() {
   const [viewType, setViewType] = useState("account-monthly");
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [selectedAccount, setSelectedAccount] = useState("1000");
   const [error, setError] = useState("");
   const [exportType, setExportType] = useState("account-monthly");
   const [exportFormat, setExportFormat] = useState("xlsx");
@@ -28,26 +55,48 @@ function ReportsPage() {
 
   useEffect(() => {
     let mounted = true;
+    apiFetch("/api/accounting/chart-of-accounts")
+      .then((res) => {
+        if (!mounted) return;
+        setAccounts(res?.data || []);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
     setLoading(true);
     setError("");
 
-    const endpoint = viewType === "loans"
-      ? "/api/reports/portfolio"
-      : viewType === "savings"
-        ? "/api/reports/savings"
-        : "/api/reports/account-monthly";
+    const endpointMap = {
+      "account-monthly": "/api/reports/account-monthly",
+      loans: "/api/reports/portfolio",
+      savings: "/api/reports/savings",
+      "chart-of-accounts": "/api/accounting/chart-of-accounts",
+      "journal-entries": "/api/accounting/journal-entries?limit=50",
+      "general-ledger": `/api/accounting/general-ledger?account_code=${encodeURIComponent(selectedAccount)}`,
+      "trial-balance": "/api/accounting/trial-balance",
+      "profit-loss": "/api/accounting/profit-loss",
+      "balance-sheet": "/api/accounting/balance-sheet",
+      "cash-flow": "/api/accounting/cash-flow",
+    };
 
-    apiFetch(endpoint)
+    apiFetch(endpointMap[viewType])
       .then((res) => {
         if (!mounted) return;
         const data = res?.data;
-        if (viewType === "loans") {
-          setRows(data?.loans || []);
-        } else if (viewType === "savings") {
-          setRows(data || []);
-        } else {
-          setRows(data?.months || []);
-        }
+        if (viewType === "loans") setRows(data?.loans || []);
+        else if (viewType === "savings") setRows(data || []);
+        else if (viewType === "account-monthly") setRows(data?.months || []);
+        else if (viewType === "journal-entries") setRows(data?.entries || []);
+        else if (viewType === "general-ledger") setRows(data?.lines || []);
+        else if (viewType === "trial-balance") setRows(data?.rows || []);
+        else if (viewType === "profit-loss" || viewType === "balance-sheet") setRows(flattenFinancialRows(data, viewType));
+        else if (viewType === "cash-flow") setRows(data?.months || []);
+        else if (viewType === "chart-of-accounts") setRows(data || []);
       })
       .catch((err) => {
         if (!mounted) return;
@@ -60,7 +109,7 @@ function ReportsPage() {
     return () => {
       mounted = false;
     };
-  }, [viewType]);
+  }, [selectedAccount, viewType]);
 
   const columns = useMemo(() => {
     if (viewType === "loans") {
@@ -82,6 +131,65 @@ function ReportsPage() {
         { key: "balance", label: "Balance", render: (row) => formatKES(row.balance) },
         { key: "total_deposits", label: "Deposits", render: (row) => formatKES(row.total_deposits) },
         { key: "total_withdrawals", label: "Withdrawals", render: (row) => formatKES(row.total_withdrawals) },
+      ];
+    }
+
+    if (viewType === "chart-of-accounts") {
+      return [
+        { key: "code", label: "Code" },
+        { key: "name", label: "Account" },
+        { key: "type", label: "Type" },
+      ];
+    }
+
+    if (viewType === "journal-entries") {
+      return [
+        { key: "id", label: "Entry" },
+        { key: "entry_date", label: "Date", render: (row) => formatDate(row.entry_date) },
+        { key: "source", label: "Source" },
+        { key: "description", label: "Description" },
+        { key: "total_debit", label: "Debit", render: (row) => formatKES(row.total_debit) },
+        { key: "total_credit", label: "Credit", render: (row) => formatKES(row.total_credit) },
+      ];
+    }
+
+    if (viewType === "general-ledger") {
+      return [
+        { key: "entry_date", label: "Date", render: (row) => formatDate(row.entry_date) },
+        { key: "entry_id", label: "Entry" },
+        { key: "description", label: "Description" },
+        { key: "debit", label: "Debit", render: (row) => formatKES(row.debit) },
+        { key: "credit", label: "Credit", render: (row) => formatKES(row.credit) },
+        { key: "running_balance", label: "Running", render: (row) => formatKES(row.running_balance) },
+      ];
+    }
+
+    if (viewType === "trial-balance") {
+      return [
+        { key: "code", label: "Code" },
+        { key: "name", label: "Account" },
+        { key: "type", label: "Type" },
+        { key: "debit_balance", label: "Debit", render: (row) => formatKES(row.debit_balance) },
+        { key: "credit_balance", label: "Credit", render: (row) => formatKES(row.credit_balance) },
+      ];
+    }
+
+    if (viewType === "profit-loss" || viewType === "balance-sheet") {
+      return [
+        { key: "section", label: "Section" },
+        { key: "code", label: "Code" },
+        { key: "name", label: "Account" },
+        { key: "balance", label: "Balance", render: (row) => formatKES(row.balance) },
+      ];
+    }
+
+    if (viewType === "cash-flow") {
+      return [
+        { key: "month", label: "Month" },
+        { key: "operating", label: "Operating", render: (row) => formatKES(row.operating) },
+        { key: "investing", label: "Investing", render: (row) => formatKES(row.investing) },
+        { key: "financing", label: "Financing", render: (row) => formatKES(row.financing) },
+        { key: "net_cash_flow", label: "Net Cash Flow", render: (row) => formatKES(row.net_cash_flow) },
       ];
     }
 
@@ -110,11 +218,19 @@ function ReportsPage() {
     }
   }
 
+  const tableRowKey = viewType === "account-monthly" || viewType === "cash-flow"
+    ? "month"
+    : viewType === "loans" || viewType === "savings" || viewType === "journal-entries"
+      ? "id"
+      : viewType === "general-ledger"
+        ? "entry_id"
+        : "code";
+
   return (
     <div className="stack">
       <header className="page-head">
-        <h2>Reports & Analytics</h2>
-        <p>View monthly account reports and export CSV/XLSX files for accounting.</p>
+        <h2>Reports & Accounting</h2>
+        <p>Monthly reports, double-entry statements, ledger, and export files.</p>
       </header>
 
       <section className="panel stack">
@@ -123,7 +239,24 @@ function ReportsPage() {
             <option value="account-monthly">Account Monthly Report</option>
             <option value="loans">Loan Portfolio Report</option>
             <option value="savings">Savings Report</option>
+            <option value="chart-of-accounts">Chart of Accounts</option>
+            <option value="journal-entries">Journal Entries</option>
+            <option value="general-ledger">General Ledger</option>
+            <option value="trial-balance">Trial Balance</option>
+            <option value="profit-loss">Profit & Loss</option>
+            <option value="balance-sheet">Balance Sheet</option>
+            <option value="cash-flow">Cash Flow</option>
           </select>
+
+          {viewType === "general-ledger" ? (
+            <select value={selectedAccount} onChange={(event) => setSelectedAccount(event.target.value)}>
+              {accounts.map((account) => (
+                <option key={account.code} value={account.code}>
+                  {account.code} - {account.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
 
         {error ? <p className="error-box">{error}</p> : null}
@@ -131,7 +264,7 @@ function ReportsPage() {
         <DataTable
           columns={columns}
           rows={rows}
-          rowKey={viewType === "account-monthly" ? "month" : "id"}
+          rowKey={tableRowKey}
           loading={loading}
           emptyMessage="No report data available."
         />

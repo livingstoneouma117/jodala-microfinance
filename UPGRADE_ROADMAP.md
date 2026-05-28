@@ -62,6 +62,15 @@ Migration approach:
 ## Phase 3 (API Enhancement)
 Goal: modular, typed API with better docs and async readiness.
 
+Accounting foundation added:
+- Computed chart of accounts
+- Auto-posted double-entry journal from savings, withdrawals, loan disbursements, repayments, and expenses
+- General ledger
+- Trial balance
+- Profit & loss
+- Balance sheet
+- Cash flow statement
+
 Option A (low-risk first):
 - Split `app.py` into Flask blueprints:
   - `routes/auth_routes.py`

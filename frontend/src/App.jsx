@@ -9,6 +9,7 @@ import SavingsPage from "./pages/SavingsPage";
 import RepaymentsPage from "./pages/RepaymentsPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
+import UserRolesPage from "./pages/UserRolesPage";
 import { getToken, setToken } from "./lib/api";
 import { ToastProvider } from "./components/ui/Toast";
 
@@ -36,6 +37,7 @@ function App() {
             <Route path="/repayments" element={<RepaymentsPage session={session} />} />
             <Route path="/reports" element={<ReportsPage session={session} />} />
             <Route path="/settings" element={<SettingsPage session={session} />} />
+            <Route path="/users" element={<UserRolesPage session={session} />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Shell>

@@ -650,3 +650,34 @@ td {
     justify-content: space-between;
   }
 }
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.32rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.role-admin {
+  color: #7c2d12;
+  background: #ffedd5;
+}
+
+.role-officer {
+  color: #075985;
+  background: #e0f2fe;
+}
+
+.role-accountant {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.role-cashier {
+  color: #854d0e;
+  background: #fef3c7;
+}

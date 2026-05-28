@@ -88,6 +88,7 @@ def build_assets() -> None:
             "--entry-names=app",
             "--loader:.js=jsx",
             "--loader:.jsx=jsx",
+            "--inject:src/react-shim.js",
             "--external:react",
             "--external:react-dom/client",
             "--external:react-router-dom",

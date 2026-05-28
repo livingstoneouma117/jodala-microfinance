@@ -20,6 +20,7 @@ function Shell({ children, onLogout }) {
           <NavLink to="/repayments" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Repayments</NavLink>
           <NavLink to="/reports" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Reports</NavLink>
           <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Settings</NavLink>
+          <NavLink to="/users" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>Users & Roles</NavLink>
         </nav>
 
         <button type="button" className="ghost-btn" onClick={onLogout}>Logout</button>

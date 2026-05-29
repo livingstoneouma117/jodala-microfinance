@@ -94,6 +94,111 @@ def report_account_monthly():
 
 
 
+@bp.route("/api/dividends", methods=["GET"])
+@login_required
+def list_dividends():
+    year = request.args.get("year")
+    where = []
+    params = []
+    if year:
+        where.append("dr.year=?")
+        params.append(int(year))
+    clause = "WHERE " + " AND ".join(where) if where else ""
+    db = get_db()
+    runs = rows_to_list(db.execute(
+        f"""SELECT dr.*, u.name AS created_by_name,
+                  COUNT(da.id) AS member_count,
+                  COALESCE(SUM(da.dividend_amount),0) AS allocated_total
+           FROM dividend_runs dr
+           LEFT JOIN dividend_allocations da ON da.run_id=dr.id
+           LEFT JOIN users u ON u.id=dr.created_by
+           {clause}
+           GROUP BY dr.id
+           ORDER BY dr.year DESC, dr.created_at DESC""",
+        params,
+    ).fetchall())
+    selected = None
+    allocations = []
+    if runs:
+        selected = runs[0]
+        allocations = rows_to_list(db.execute(
+            """SELECT da.*, m.name AS member_name, m.phone AS member_phone
+               FROM dividend_allocations da JOIN members m ON m.id=da.member_id
+               WHERE da.run_id=? ORDER BY da.dividend_amount DESC""",
+            (selected["id"],),
+        ).fetchall())
+    db.close()
+    return success({"runs": runs, "selected": selected, "allocations": allocations})
+
+
+@bp.route("/api/dividends/calculate", methods=["POST"])
+@login_required
+@roles_required("admin", "accountant")
+def calculate_dividends():
+    d = request.json or {}
+    try:
+        year = int(d.get("year") or date.today().year)
+        surplus = float(d.get("surplus") or 0)
+    except (TypeError, ValueError):
+        return error("Year and surplus must be valid numbers")
+    if surplus <= 0:
+        return error("Surplus must be greater than zero")
+    basis = (d.get("basis") or "savings_balance").strip().lower()
+    if basis != "savings_balance":
+        return error("Only savings_balance dividend basis is currently supported")
+    db = get_db()
+    members = rows_to_list(db.execute(
+        """SELECT m.id, m.name, COALESCE(sa.balance, m.savings, 0) AS basis_amount
+           FROM members m LEFT JOIN savings_accounts sa ON sa.member_id=m.id
+           WHERE m.member_type='member' AND m.status='active'
+           ORDER BY m.name"""
+    ).fetchall())
+    total_basis = sum(float(member.get("basis_amount") or 0) for member in members)
+    if total_basis <= 0:
+        db.close(); return error("No member savings balance available for dividend allocation")
+    db.execute(
+        "INSERT INTO dividend_runs (year,surplus,basis,total_basis,status,created_by) VALUES (?,?,?,?,?,?)",
+        (year, surplus, basis, total_basis, "draft", g.user["sub"]),
+    )
+    run_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    allocations = []
+    remaining = round(surplus, 2)
+    eligible = [member for member in members if float(member.get("basis_amount") or 0) > 0]
+    for index, member in enumerate(eligible):
+        basis_amount = float(member.get("basis_amount") or 0)
+        amount = remaining if index == len(eligible) - 1 else round((basis_amount / total_basis) * surplus, 2)
+        remaining = round(remaining - amount, 2)
+        db.execute(
+            "INSERT INTO dividend_allocations (run_id,member_id,basis_amount,dividend_amount) VALUES (?,?,?,?)",
+            (run_id, member["id"], basis_amount, amount),
+        )
+        allocations.append({"member_id": member["id"], "member_name": member["name"], "basis_amount": basis_amount, "dividend_amount": amount})
+    db.commit()
+    run = row_to_dict(db.execute("SELECT * FROM dividend_runs WHERE id=?", (run_id,)).fetchone())
+    db.close()
+    audit(f"Calculated dividends for {year}", "Dividends", f"Surplus KES {surplus}")
+    return success({"run": run, "allocations": allocations}, "Dividend allocation calculated", 201)
+
+
+@bp.route("/api/dividends/<int:run_id>/status", methods=["PATCH"])
+@login_required
+@roles_required("admin", "accountant")
+def update_dividend_status(run_id):
+    status = ((request.json or {}).get("status") or "").strip().lower()
+    if status not in {"draft", "approved", "paid", "cancelled"}:
+        return error("Status must be draft, approved, paid, or cancelled")
+    db = get_db()
+    run = row_to_dict(db.execute("SELECT * FROM dividend_runs WHERE id=?", (run_id,)).fetchone())
+    if not run:
+        db.close(); return error("Dividend run not found", 404)
+    db.execute("UPDATE dividend_runs SET status=? WHERE id=?", (status, run_id))
+    if status == "paid":
+        db.execute("UPDATE dividend_allocations SET paid=1 WHERE run_id=?", (run_id,))
+    db.commit(); db.close()
+    audit(f"Set dividend run {run_id} to {status}", "Dividends")
+    return success(msg="Dividend status updated")
+
+
 @bp.route("/api/reports/export/<report_type>", methods=["GET"])
 @login_required
 def export_report(report_type):
@@ -151,6 +256,16 @@ def export_report(report_type):
     elif report_type == "members":
         headers = ["ID","Name","Phone","Email","National ID","Status","Joined","Savings"]
         rows = rows_to_list(db.execute("SELECT id,name,phone,email,national_id,status,joined_date,savings FROM members WHERE member_type='member'").fetchall())
+    elif report_type == "dividends":
+        headers = ["Run ID","Year","Member ID","Member","Basis Amount","Dividend Amount","Paid","Status"]
+        rows = rows_to_list(db.execute(
+            """SELECT dr.id AS 'Run ID', dr.year AS Year, da.member_id AS 'Member ID', m.name AS Member,
+                      da.basis_amount AS 'Basis Amount', da.dividend_amount AS 'Dividend Amount', da.paid AS Paid, dr.status AS Status
+               FROM dividend_allocations da
+               JOIN dividend_runs dr ON dr.id=da.run_id
+               JOIN members m ON m.id=da.member_id
+               ORDER BY dr.year DESC, da.dividend_amount DESC"""
+        ).fetchall())
     else:
         db.close(); return error("Unknown report type")
 

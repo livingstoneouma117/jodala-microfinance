@@ -50,8 +50,30 @@ function ReportsPage() {
   const [exportType, setExportType] = useState("account-monthly");
   const [exportFormat, setExportFormat] = useState("xlsx");
   const [exporting, setExporting] = useState(false);
+  const [dividendForm, setDividendForm] = useState({ year: String(new Date().getFullYear()), surplus: "" });
+  const [dividendRuns, setDividendRuns] = useState([]);
+  const [dividendAllocations, setDividendAllocations] = useState([]);
+  const [dividendLoading, setDividendLoading] = useState(false);
 
   const pushToast = useToast();
+
+  async function loadDividends() {
+    setDividendLoading(true);
+    try {
+      const res = await apiFetch(`/api/dividends?year=${encodeURIComponent(dividendForm.year)}`);
+      setDividendRuns(res?.data?.runs || []);
+      setDividendAllocations(res?.data?.allocations || []);
+    } catch (err) {
+      pushToast(err.message || "Failed to load dividends", "error");
+    } finally {
+      setDividendLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadDividends();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -204,6 +226,32 @@ function ReportsPage() {
     ];
   }, [viewType]);
 
+  async function calculateDividend(event) {
+    event.preventDefault();
+    setDividendLoading(true);
+    try {
+      const res = await apiFetch("/api/dividends/calculate", {
+        method: "POST",
+        body: JSON.stringify({ year: Number(dividendForm.year), surplus: Number(dividendForm.surplus) }),
+      });
+      setDividendAllocations(res?.data?.allocations || []);
+      pushToast("Dividend allocation calculated.", "success");
+      setDividendForm((prev) => ({ ...prev, surplus: "" }));
+      await loadDividends();
+    } catch (err) {
+      pushToast(err.message || "Could not calculate dividends", "error");
+    } finally {
+      setDividendLoading(false);
+    }
+  }
+
+  const dividendColumns = useMemo(() => [
+    { key: "member_name", label: "Member" },
+    { key: "basis_amount", label: "Savings Basis", render: (row) => formatKES(row.basis_amount) },
+    { key: "dividend_amount", label: "Dividend", render: (row) => formatKES(row.dividend_amount) },
+    { key: "paid", label: "Paid", render: (row) => (row.paid ? "Yes" : "No") },
+  ], []);
+
   async function exportReport() {
     setExporting(true);
     try {
@@ -270,6 +318,24 @@ function ReportsPage() {
         />
       </section>
 
+
+      <section className="panel stack">
+        <div className="row-between">
+          <div>
+            <h3>Dividend / Profit Sharing</h3>
+            <p className="muted">Calculate year-end surplus distribution based on member savings balances.</p>
+          </div>
+          <button type="button" className="ghost-btn" onClick={loadDividends} disabled={dividendLoading}>Refresh</button>
+        </div>
+        <form className="row-form" onSubmit={calculateDividend}>
+          <input type="number" min="2000" value={dividendForm.year} onChange={(event) => setDividendForm((prev) => ({ ...prev, year: event.target.value }))} placeholder="Year" required />
+          <input type="number" min="1" value={dividendForm.surplus} onChange={(event) => setDividendForm((prev) => ({ ...prev, surplus: event.target.value }))} placeholder="Surplus amount" required />
+          <button type="submit" className="primary-btn" disabled={dividendLoading}>{dividendLoading ? "Calculating..." : "Calculate Dividends"}</button>
+        </form>
+        {dividendRuns.length ? <p className="muted">Latest run: {dividendRuns[0].year} - {dividendRuns[0].status} - {formatKES(dividendRuns[0].allocated_total)}</p> : <p className="muted">No dividend runs for this year yet.</p>}
+        <DataTable columns={dividendColumns} rows={dividendAllocations} rowKey="id" loading={dividendLoading} emptyMessage="No dividend allocations yet." />
+      </section>
+
       <section className="panel stack">
         <h3>Export</h3>
         <div className="toolbar">
@@ -280,6 +346,7 @@ function ReportsPage() {
             <option value="savings">Savings</option>
             <option value="expenses">Expenses</option>
             <option value="members">Members</option>
+            <option value="dividends">Dividends</option>
           </select>
 
           <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value)}>

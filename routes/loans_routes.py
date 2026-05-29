@@ -5,13 +5,114 @@ from services.common import *
 loans_bp = Blueprint("loans", __name__)
 bp = loans_bp
 
+def _loan_product_payload(d, existing=None):
+    name = (d.get("name") or (existing or {}).get("name") or "").strip()
+    method = (d.get("method") or (existing or {}).get("method") or "reducing").strip().lower()
+    if method not in {"reducing", "flat"}:
+        raise ValueError("Method must be reducing or flat")
+    if not name:
+        raise ValueError("Product name is required")
+    min_amount = float(d.get("min_amount", (existing or {}).get("min_amount", 0)) or 0)
+    max_amount = float(d.get("max_amount", (existing or {}).get("max_amount", 0)) or 0)
+    min_term = int(d.get("min_term", (existing or {}).get("min_term", 1)) or 1)
+    max_term = int(d.get("max_term", (existing or {}).get("max_term", 1)) or 1)
+    annual_rate = float(d.get("annual_rate", (existing or {}).get("annual_rate", 0)) or 0)
+    penalty_rate = float(d.get("penalty_rate", (existing or {}).get("penalty_rate", 0)) or 0)
+    active = 1 if bool(d.get("active", (existing or {}).get("active", 1))) else 0
+    if min_amount < 0 or max_amount <= 0 or max_amount < min_amount:
+        raise ValueError("Amounts must be valid and max amount must be at least min amount")
+    if min_term <= 0 or max_term < min_term:
+        raise ValueError("Terms must be valid and max term must be at least min term")
+    if annual_rate < 0 or penalty_rate < 0:
+        raise ValueError("Rates cannot be negative")
+    return {
+        "name": name,
+        "min_amount": min_amount,
+        "max_amount": max_amount,
+        "min_term": min_term,
+        "max_term": max_term,
+        "annual_rate": annual_rate,
+        "method": method,
+        "penalty_rate": penalty_rate,
+        "active": active,
+    }
+
+
 @bp.route("/api/loan-products", methods=["GET"])
 @login_required
 def get_loan_products():
-    db   = get_db()
-    rows = rows_to_list(db.execute("SELECT * FROM loan_products WHERE active=1").fetchall())
+    include_inactive = request.args.get("include_inactive") in {"1", "true", "yes"}
+    db = get_db()
+    rows = rows_to_list(db.execute(
+        "SELECT * FROM loan_products ORDER BY active DESC, name" if include_inactive else "SELECT * FROM loan_products WHERE active=1 ORDER BY name"
+    ).fetchall())
     db.close()
     return success(rows)
+
+
+@bp.route("/api/loan-products", methods=["POST"])
+@login_required
+@roles_required("admin")
+def create_loan_product():
+    try:
+        payload = _loan_product_payload(request.json or {})
+    except (ValueError, TypeError) as exc:
+        return error(str(exc))
+    db = get_db()
+    db.execute(
+        """INSERT INTO loan_products (name,min_amount,max_amount,min_term,max_term,annual_rate,method,penalty_rate,active)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (payload["name"], payload["min_amount"], payload["max_amount"], payload["min_term"], payload["max_term"],
+         payload["annual_rate"], payload["method"], payload["penalty_rate"], payload["active"])
+    )
+    db.commit()
+    product = row_to_dict(db.execute("SELECT * FROM loan_products WHERE id=last_insert_rowid()").fetchone())
+    db.close()
+    audit(f"Created loan product {product['name']}", "Loan Products")
+    return success(product, "Loan product created", 201)
+
+
+@bp.route("/api/loan-products/<int:product_id>", methods=["PUT"])
+@login_required
+@roles_required("admin")
+def update_loan_product(product_id):
+    db = get_db()
+    existing = row_to_dict(db.execute("SELECT * FROM loan_products WHERE id=?", (product_id,)).fetchone())
+    if not existing:
+        db.close(); return error("Loan product not found", 404)
+    try:
+        payload = _loan_product_payload(request.json or {}, existing)
+    except (ValueError, TypeError) as exc:
+        db.close(); return error(str(exc))
+    db.execute(
+        """UPDATE loan_products
+           SET name=?, min_amount=?, max_amount=?, min_term=?, max_term=?, annual_rate=?, method=?, penalty_rate=?, active=?
+           WHERE id=?""",
+        (payload["name"], payload["min_amount"], payload["max_amount"], payload["min_term"], payload["max_term"],
+         payload["annual_rate"], payload["method"], payload["penalty_rate"], payload["active"], product_id)
+    )
+    db.commit()
+    product = row_to_dict(db.execute("SELECT * FROM loan_products WHERE id=?", (product_id,)).fetchone())
+    db.close()
+    audit(f"Updated loan product {product['name']}", "Loan Products")
+    return success(product, "Loan product updated")
+
+
+@bp.route("/api/loan-products/<int:product_id>/status", methods=["PATCH"])
+@login_required
+@roles_required("admin")
+def set_loan_product_status(product_id):
+    active = 1 if (request.json or {}).get("active") else 0
+    db = get_db()
+    product = row_to_dict(db.execute("SELECT * FROM loan_products WHERE id=?", (product_id,)).fetchone())
+    if not product:
+        db.close(); return error("Loan product not found", 404)
+    db.execute("UPDATE loan_products SET active=? WHERE id=?", (active, product_id))
+    db.commit()
+    updated = row_to_dict(db.execute("SELECT * FROM loan_products WHERE id=?", (product_id,)).fetchone())
+    db.close()
+    audit(f"{'Activated' if active else 'Deactivated'} loan product {product['name']}", "Loan Products")
+    return success(updated, "Loan product activated" if active else "Loan product deactivated")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # LOANS
@@ -96,11 +197,19 @@ def get_loan(loan_id):
     repays = rows_to_list(db.execute(
         "SELECT * FROM repayments WHERE loan_id=? ORDER BY payment_date DESC", (loan_id,)
     ).fetchall())
+    guarantors = rows_to_list(db.execute(
+        """SELECT g.*, gm.name AS guarantor_name, gm.phone AS guarantor_phone, gm.savings AS guarantor_savings
+           FROM guarantors g
+           JOIN members gm ON gm.id=g.guarantor_id
+           WHERE (g.loan_id=? OR (g.loan_id IS NULL AND g.member_id=?))
+           ORDER BY g.created_at DESC, g.id DESC""",
+        (loan_id, loan.get("member_id")),
+    ).fetchall())
     risk = loan_risk_snapshot(db, loan_id)
     db.close()
 
     summary = loan_summary(loan, schedule)
-    return success({"loan": loan, "schedule": schedule, "repayments": repays, "summary": summary, "risk": risk})
+    return success({"loan": loan, "schedule": schedule, "repayments": repays, "guarantors": guarantors, "summary": summary, "risk": risk})
 
 
 
@@ -110,6 +219,14 @@ def loan_statement(loan_id):
     data = get_loan_statement_data(loan_id)
     if not data:
         return error("Loan not found", 404)
+    if (request.args.get("format") or "").strip().lower() == "pdf" or request.args.get("download") in {"1", "true", "yes"}:
+        pdf = build_statement_pdf(loan_id, data)
+        return send_file(
+            BytesIO(pdf),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"loan-statement-{loan_id}.pdf",
+        )
     loan = data["loan"]
     schedule = data["schedule"]
     repays = data["repays"]
@@ -428,6 +545,134 @@ def reject_loan(loan_id):
     audit(f"Rejected loan {loan_id}", "Loans", d.get("reason",""))
     return success(msg="Loan rejected")
 
+
+
+@bp.route("/api/loans/<loan_id>/guarantors", methods=["GET"])
+@login_required
+def get_loan_guarantors(loan_id):
+    db = get_db()
+    loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
+    if not loan:
+        db.close(); return error("Loan not found", 404)
+    rows = rows_to_list(db.execute(
+        """SELECT g.*, gm.name AS guarantor_name, gm.phone AS guarantor_phone, gm.savings AS guarantor_savings
+           FROM guarantors g JOIN members gm ON gm.id=g.guarantor_id
+           WHERE (g.loan_id=? OR (g.loan_id IS NULL AND g.member_id=?))
+           ORDER BY g.created_at DESC, g.id DESC""",
+        (loan_id, loan["member_id"]),
+    ).fetchall())
+    db.close()
+    return success(rows)
+
+
+@bp.route("/api/loans/<loan_id>/guarantors", methods=["POST"])
+@login_required
+@roles_required("admin", "officer")
+def add_loan_guarantor(loan_id):
+    d = request.json or {}
+    guarantor_id = (d.get("guarantor_id") or "").strip()
+    if not guarantor_id:
+        return error("Guarantor member is required")
+    amount = float(d.get("amount") or 0)
+    if amount < 0:
+        return error("Guarantee amount cannot be negative")
+    db = get_db()
+    loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
+    if not loan:
+        db.close(); return error("Loan not found", 404)
+    if guarantor_id == loan["member_id"]:
+        db.close(); return error("Borrower cannot guarantee their own loan")
+    guarantor = row_to_dict(db.execute("SELECT * FROM members WHERE id=? AND member_type='member' AND status='active'", (guarantor_id,)).fetchone())
+    if not guarantor:
+        db.close(); return error("Active guarantor member not found")
+    duplicate = db.execute(
+        "SELECT id FROM guarantors WHERE guarantor_id=? AND (loan_id=? OR (loan_id IS NULL AND member_id=?))",
+        (guarantor_id, loan_id, loan["member_id"]),
+    ).fetchone()
+    if duplicate:
+        db.close(); return error("Guarantor already attached to this loan")
+    db.execute(
+        """INSERT INTO guarantors (loan_id,member_id,guarantor_id,amount,status,notes)
+           VALUES (?,?,?,?,?,?)""",
+        (loan_id, loan["member_id"], guarantor_id, amount, d.get("status") or "active", d.get("notes") or ""),
+    )
+    db.commit()
+    row = row_to_dict(db.execute("SELECT * FROM guarantors WHERE id=last_insert_rowid()").fetchone())
+    db.close()
+    audit(f"Added guarantor {guarantor_id} to loan {loan_id}", "Loans")
+    return success(row, "Guarantor added", 201)
+
+
+@bp.route("/api/loans/<loan_id>/guarantors/<int:guarantor_row_id>", methods=["DELETE"])
+@login_required
+@roles_required("admin", "officer")
+def remove_loan_guarantor(loan_id, guarantor_row_id):
+    db = get_db()
+    row = row_to_dict(db.execute("SELECT * FROM guarantors WHERE id=? AND loan_id=?", (guarantor_row_id, loan_id)).fetchone())
+    if not row:
+        db.close(); return error("Guarantor not found", 404)
+    db.execute("DELETE FROM guarantors WHERE id=?", (guarantor_row_id,))
+    db.commit(); db.close()
+    audit(f"Removed guarantor {row.get('guarantor_id')} from loan {loan_id}", "Loans")
+    return success(msg="Guarantor removed")
+
+
+@bp.route("/api/loans/<loan_id>/restructure", methods=["POST"])
+@login_required
+@roles_required("admin", "officer")
+def restructure_loan(loan_id):
+    d = request.json or {}
+    db = get_db()
+    refresh_loan_statuses(db)
+    loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
+    if not loan:
+        db.close(); return error("Loan not found", 404)
+    if loan.get("status") not in {"active", "overdue"}:
+        db.close(); return error("Only active or overdue loans can be restructured")
+    schedule = rows_to_list(db.execute("SELECT * FROM loan_schedule WHERE loan_id=? ORDER BY installment", (loan_id,)).fetchall())
+    if not schedule:
+        db.close(); return error("Loan has no schedule to restructure")
+    summary = loan_summary(loan, schedule)
+    outstanding = float(summary.get("outstanding") or 0)
+    if outstanding <= 0:
+        db.close(); return error("Loan is already fully paid")
+    try:
+        term_months = int(d.get("term_months") or loan.get("term_months") or 1)
+        annual_rate = float(d.get("annual_rate") if d.get("annual_rate") is not None else loan.get("annual_rate") or 0)
+        method = (d.get("method") or loan.get("method") or "reducing").strip().lower()
+    except (TypeError, ValueError):
+        db.close(); return error("Term and rate must be valid numbers")
+    if term_months <= 0:
+        db.close(); return error("Term must be at least 1 month")
+    if annual_rate < 0:
+        db.close(); return error("Rate cannot be negative")
+    if method not in {"reducing", "flat"}:
+        db.close(); return error("Method must be reducing or flat")
+    effective_date = clean_date(d.get("effective_date"), date.today().isoformat())
+    paid_count = db.execute("SELECT COUNT(*) FROM loan_schedule WHERE loan_id=? AND paid=1", (loan_id,)).fetchone()[0]
+    db.execute("DELETE FROM loan_schedule WHERE loan_id=? AND paid=0", (loan_id,))
+    next_installment = int(db.execute("SELECT COALESCE(MAX(installment),0)+1 FROM loan_schedule WHERE loan_id=?", (loan_id,)).fetchone()[0] or 1)
+    new_schedule = build_schedule(loan_id, outstanding, annual_rate, term_months, method, effective_date)
+    for idx, row in enumerate(new_schedule, start=next_installment):
+        db.execute(
+            "INSERT INTO loan_schedule (loan_id,installment,due_date,principal,interest,repayment,balance) VALUES (?,?,?,?,?,?,?)",
+            (loan_id, idx, row["due_date"], row["principal"], row["interest"], row["repayment"], row["balance"]),
+        )
+    note = (d.get("notes") or "").strip()
+    note_line = f"Restructured on {effective_date}: term {term_months} months, rate {annual_rate}%, method {method}."
+    if note:
+        note_line += f" {note}"
+    combined_notes = "\n".join([item for item in [loan.get("notes"), note_line] if item])
+    db.execute(
+        "UPDATE loans SET annual_rate=?, term_months=?, method=?, status='active', notes=? WHERE id=?",
+        (annual_rate, term_months, method, combined_notes, loan_id),
+    )
+    allocate_repayment_to_schedule(db, loan_id, effective_date)
+    db.commit()
+    updated = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
+    db.close()
+    audit(f"Restructured loan {loan_id}", "Loans", f"Outstanding KES {outstanding}; paid installments kept: {paid_count}")
+    return success(updated, "Loan restructured")
 
 
 @bp.route("/api/loans/<loan_id>/schedule", methods=["GET"])

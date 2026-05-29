@@ -79,9 +79,15 @@ def init_db():
     # ── Guarantors ───────────────────────────────────────────────────────────
     c.execute("""
     CREATE TABLE IF NOT EXISTS guarantors (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        member_id   TEXT NOT NULL,
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        loan_id      TEXT,
+        member_id    TEXT NOT NULL,
         guarantor_id TEXT NOT NULL,
+        amount       REAL NOT NULL DEFAULT 0,
+        status       TEXT NOT NULL DEFAULT 'active',
+        notes        TEXT,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (loan_id)      REFERENCES loans(id),
         FOREIGN KEY (member_id)    REFERENCES members(id),
         FOREIGN KEY (guarantor_id) REFERENCES members(id)
     )""")
@@ -230,6 +236,34 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
 
+
+
+    # ── Dividends / Profit Sharing ─────────────────────────────────────────────
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS dividend_runs (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        year         INTEGER NOT NULL,
+        surplus      REAL NOT NULL,
+        basis        TEXT NOT NULL DEFAULT 'savings_balance',
+        total_basis  REAL NOT NULL DEFAULT 0,
+        status       TEXT NOT NULL DEFAULT 'draft',
+        created_by   INTEGER,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    )""")
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS dividend_allocations (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id          INTEGER NOT NULL,
+        member_id       TEXT NOT NULL,
+        basis_amount    REAL NOT NULL DEFAULT 0,
+        dividend_amount REAL NOT NULL DEFAULT 0,
+        paid            INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (run_id)    REFERENCES dividend_runs(id),
+        FOREIGN KEY (member_id) REFERENCES members(id)
+    )""")
+
     # ── Audit Logs ───────────────────────────────────────────────────────────
     c.execute("""
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -244,6 +278,7 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
 
+    _migrate_schema(c)
     conn.commit()
     if _env_bool("SEED_DEMO_DATA", False):
         _seed_data(conn)
@@ -536,6 +571,47 @@ def _migrate_schema(c):
     member_cols = {row[1] for row in c.execute("PRAGMA table_info(members)").fetchall()}
     if "member_type" not in member_cols:
         c.execute("ALTER TABLE members ADD COLUMN member_type TEXT NOT NULL DEFAULT 'member'")
+
+    try:
+        guarantor_cols = {row[1] for row in c.execute("PRAGMA table_info(guarantors)").fetchall()}
+        if guarantor_cols:
+            if "loan_id" not in guarantor_cols:
+                c.execute("ALTER TABLE guarantors ADD COLUMN loan_id TEXT")
+            if "amount" not in guarantor_cols:
+                c.execute("ALTER TABLE guarantors ADD COLUMN amount REAL NOT NULL DEFAULT 0")
+            if "status" not in guarantor_cols:
+                c.execute("ALTER TABLE guarantors ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+            if "notes" not in guarantor_cols:
+                c.execute("ALTER TABLE guarantors ADD COLUMN notes TEXT")
+            if "created_at" not in guarantor_cols:
+                c.execute("ALTER TABLE guarantors ADD COLUMN created_at TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS dividend_runs (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        year         INTEGER NOT NULL,
+        surplus      REAL NOT NULL,
+        basis        TEXT NOT NULL DEFAULT 'savings_balance',
+        total_basis  REAL NOT NULL DEFAULT 0,
+        status       TEXT NOT NULL DEFAULT 'draft',
+        created_by   INTEGER,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    )""")
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS dividend_allocations (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id          INTEGER NOT NULL,
+        member_id       TEXT NOT NULL,
+        basis_amount    REAL NOT NULL DEFAULT 0,
+        dividend_amount REAL NOT NULL DEFAULT 0,
+        paid            INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (run_id)    REFERENCES dividend_runs(id),
+        FOREIGN KEY (member_id) REFERENCES members(id)
+    )""")
 
     defaults = [
         ("sacco_name", "SACCOFinance Chama"),

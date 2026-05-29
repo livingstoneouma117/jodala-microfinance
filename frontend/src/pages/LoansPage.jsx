@@ -1,6 +1,7 @@
 import { useState } from "react";
 import LoanForm from "../components/loans/LoanForm";
 import LoanList from "../components/loans/LoanList";
+import LoanProducts from "../components/loans/LoanProducts";
 import Modal from "../components/ui/Modal";
 import { useToast } from "../components/ui/Toast";
 
@@ -20,6 +21,8 @@ function LoansPage() {
           New Loan Application
         </button>
       </div>
+
+      <LoanProducts />
 
       <LoanList refreshToken={refreshToken} />
 

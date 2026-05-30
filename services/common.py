@@ -744,11 +744,20 @@ def get_loan_statement_data(loan_id):
         return None
     schedule = rows_to_list(db.execute("SELECT * FROM loan_schedule WHERE loan_id=? ORDER BY installment", (loan_id,)).fetchall())
     repays = rows_to_list(db.execute("SELECT * FROM repayments WHERE loan_id=? ORDER BY payment_date", (loan_id,)).fetchall())
+    guarantors = rows_to_list(db.execute(
+        """SELECT g.*, gm.name AS guarantor_name, gm.phone AS guarantor_phone, gm.savings AS guarantor_savings
+           FROM guarantors g
+           JOIN members gm ON gm.id=g.guarantor_id
+           WHERE (g.loan_id=? OR (g.loan_id IS NULL AND g.member_id=?))
+           ORDER BY g.created_at DESC, g.id DESC""",
+        (loan_id, loan.get("member_id")),
+    ).fetchall())
     db.close()
     return {
         "loan": loan,
         "schedule": schedule,
         "repays": repays,
+        "guarantors": guarantors,
         "settings": get_settings_dict(),
         "summary": loan_summary(loan, schedule),
     }
@@ -757,175 +766,315 @@ def build_statement_pdf(loan_id, data) -> bytes:
     loan = data["loan"]
     summary = data["summary"]
     settings = data["settings"]
-    brand = settings.get("sacco_name") or "SACCOFinance"
+    schedule = data.get("schedule") or []
+    repayments = data.get("repays") or []
+    guarantors = data.get("guarantors") or []
+
+    brand = settings.get("sacco_name") or "Jodala Microfinance"
+    today_label = pdf_date(date.today().isoformat())
+    statement_ref = f"{loan_id}-{date.today().strftime('%Y%m%d')}"
     pages = []
     ops = []
-    margin = 42
-    width = 511
-    blue = (23, 32, 51)
+    page_no = 1
+    margin = 38
+    width = 519
+    right = margin + width
+    navy = (15, 23, 42)
+    slate = (51, 65, 85)
     muted = (100, 116, 139)
-    border = (214, 221, 232)
-    soft = (247, 249, 252)
-    accent = (37, 99, 235)
+    border = (203, 213, 225)
+    soft = (248, 250, 252)
+    panel = (241, 245, 249)
+    teal = (15, 118, 110)
+    green = (22, 101, 52)
+    amber = (180, 83, 9)
+    red = (185, 28, 28)
+    blue = (37, 99, 235)
+    has_logo = bool(pdf_jpeg_from_data_url(settings.get("logo_image")))
 
-    def add_header(page_no=1):
+    total_repayable = float(summary.get("total_repayable") or 0)
+    total_paid = float(summary.get("total_paid") or loan.get("total_paid") or 0)
+    total_interest = float(summary.get("total_interest") or 0)
+    outstanding = float(summary.get("outstanding") or 0)
+    penalties = float(summary.get("penalties") or loan.get("penalties") or 0)
+    progress = min(1.0, max(0.0, total_paid / total_repayable)) if total_repayable else 0.0
+
+    def money_plain(value) -> str:
+        return f"{float(value or 0):,.2f}"
+
+    def short_status(value) -> str:
+        return str(value or "pending").replace("_", " ").strip().title()
+
+    def status_colors(value):
+        status = str(value or "").lower()
+        if status in {"completed", "closed", "cleared"}:
+            return (220, 252, 231), green
+        if status in {"active", "disbursed"}:
+            return (204, 251, 241), teal
+        if status in {"overdue", "defaulted", "rejected"}:
+            return (254, 226, 226), red
+        if status in {"approved", "reviewed", "submitted", "pending"}:
+            return (254, 243, 199), amber
+        return (226, 232, 240), slate
+
+    def draw_badge(o, label, x, y, w=86):
+        fill, color = status_colors(label)
+        o.append(pdf_rect(x, y - 18, w, 18, fill=fill, stroke=fill, line_width=0.2))
+        o.append(pdf_text(short_status(label).upper(), x + w / 2, y - 12.5, 7.2, "F2", color, "center", max_chars=16))
+
+    def add_header(page=1):
         o = [
-            pdf_rect(0, 782, 595, 60, fill=blue),
-            pdf_rect(margin, 798, 34, 34, fill=accent),
-            ("q 34 0 0 34 %.2f %.2f cm /Logo Do Q" % (margin, 798)) if pdf_jpeg_from_data_url(settings.get("logo_image")) else pdf_text((settings.get("logo_text") or brand[:2]).upper()[:3], margin + 17, 810, 11, "F2", (255, 255, 255), "center"),
-            pdf_text(brand, 86, 818, 16, "F2", (255, 255, 255), max_chars=34),
-            pdf_text(settings.get("address") or "Loan management statement", 86, 803, 8, "F1", (213, 226, 255), max_chars=58),
-            pdf_text(settings.get("phone") or "", 86, 791, 8, "F1", (213, 226, 255), max_chars=42),
-            pdf_text("LOAN STATEMENT", 553, 818, 12, "F2", (255, 255, 255), "right"),
-            pdf_text(f"Statement No: {loan_id}", 553, 803, 8, "F1", (213, 226, 255), "right"),
-            pdf_text(f"Issued: {pdf_date(date.today().isoformat())}", 553, 791, 8, "F1", (213, 226, 255), "right"),
+            pdf_rect(0, 770, 595, 72, fill=navy),
+            pdf_rect(0, 756, 595, 14, fill=teal),
+            pdf_text("CONFIDENTIAL LOAN STATEMENT", right, 816, 12, "F2", (255, 255, 255), "right"),
+            pdf_text(f"Statement Ref: {statement_ref}", right, 799, 8, "F1", (203, 213, 225), "right"),
+            pdf_text(f"Issued: {today_label}", right, 786, 8, "F1", (203, 213, 225), "right"),
         ]
-        if page_no > 1:
-            o.append(pdf_text(f"Page {page_no}", 553, 766, 8, "F1", muted, "right"))
+        if has_logo:
+            o.extend([
+                pdf_rect(margin, 789, 42, 42, fill=(255, 255, 255), stroke=(226, 232, 240)),
+                "q 38 0 0 38 %.2f %.2f cm /Logo Do Q" % (margin + 2, 791),
+            ])
+        else:
+            initials = (settings.get("logo_text") or "JM").upper()[:3]
+            o.extend([
+                pdf_rect(margin, 789, 42, 42, fill=teal),
+                pdf_text(initials, margin + 21, 807, 13, "F2", (255, 255, 255), "center", max_chars=3),
+            ])
+        o.extend([
+            pdf_text(brand, margin + 56, 815, 16, "F2", (255, 255, 255), max_chars=34),
+            pdf_text(settings.get("address") or "Loan management office", margin + 56, 798, 8, "F1", (203, 213, 225), max_chars=58),
+            pdf_text(settings.get("phone") or settings.get("email") or "", margin + 56, 786, 8, "F1", (203, 213, 225), max_chars=58),
+        ])
+        if page > 1:
+            o.append(pdf_text(f"Loan {loan_id}", margin, 735, 8, "F2", muted))
+            o.append(pdf_text(f"Page {page}", right, 735, 8, "F1", muted, "right"))
         return o
 
-    def add_footer(o, page_no):
+    def add_footer(o, page):
         o.extend([
-            pdf_line(margin, 34, margin + width, 34, border),
-            pdf_text("This statement is system-generated and reflects transactions recorded at the time of issue.", margin, 20, 7.5, "F1", muted),
-            pdf_text(f"Page {page_no}", margin + width, 20, 7.5, "F1", muted, "right"),
+            pdf_line(margin, 34, right, 34, border),
+            pdf_text(f"Verify with statement ref {statement_ref}. Generated electronically from recorded transactions.", margin, 20, 7.2, "F1", muted, max_chars=78),
+            pdf_text(f"Page {page}", right, 20, 7.2, "F1", muted, "right"),
         ])
 
-    def section_title(o, title, y):
-        o.append(pdf_text(title.upper(), margin, y, 9, "F2", blue))
-        o.append(pdf_line(margin, y - 7, margin + width, y - 7, border))
-        return y - 20
+    def section_title(title, y_pos):
+        ops.append(pdf_text(title.upper(), margin, y_pos, 9, "F2", navy))
+        ops.append(pdf_line(margin, y_pos - 7, right, y_pos - 7, border))
+        return y_pos - 20
 
-    def info_pair(o, label, value, x, y, w=222):
-        o.append(pdf_text(label.upper(), x, y, 6.8, "F2", muted, max_chars=24))
-        o.append(pdf_text(value or "-", x, y - 13, 9, "F1", blue, max_chars=max(18, int(w / 4.6))))
+    def info_pair(label, value, x, y_pos, w=150):
+        ops.append(pdf_text(label.upper(), x, y_pos, 6.7, "F2", muted, max_chars=24))
+        ops.append(pdf_text(value or "-", x, y_pos - 13, 8.7, "F1", navy, max_chars=max(14, int(w / 4.7))))
 
-    ops.extend(add_header())
-    y = 748
-    ops.append(pdf_rect(margin, y - 78, width, 78, fill=soft, stroke=border))
-    info_pair(ops, "Borrower", loan.get("member_name"), margin + 14, y - 24)
-    info_pair(ops, "Phone", loan.get("member_phone"), margin + 280, y - 24)
-    info_pair(ops, "Address", loan.get("member_address"), margin + 14, y - 56)
-    info_pair(ops, "Customer Type", "External Borrower" if loan.get("member_type") == "borrower" else "Member", margin + 280, y - 56)
+    def metric_card(label, value, x, y_pos, w, tone):
+        ops.append(pdf_rect(x, y_pos - 62, w, 62, fill=(255, 255, 255), stroke=border))
+        ops.append(pdf_rect(x, y_pos - 3, w, 3, fill=tone))
+        ops.append(pdf_text(label.upper(), x + 10, y_pos - 20, 6.8, "F2", muted, max_chars=22))
+        ops.append(pdf_text(value, x + 10, y_pos - 43, 11, "F2", navy, max_chars=20))
 
-    y = 640
-    cards = [
-        ("Principal", pdf_money(loan.get("amount"))),
-        ("Total Repayable", pdf_money(summary.get("total_repayable"))),
-        ("Total Paid", pdf_money(summary.get("total_paid"))),
-        ("Outstanding", pdf_money(summary.get("outstanding"))),
-    ]
-    card_w = (width - 18) / 4
-    for i, (label, value) in enumerate(cards):
-        x = margin + i * (card_w + 6)
-        ops.append(pdf_rect(x, y - 58, card_w, 58, fill=(255, 255, 255), stroke=border))
-        ops.append(pdf_text(label.upper(), x + 10, y - 19, 6.8, "F2", muted, max_chars=18))
-        ops.append(pdf_text(value, x + 10, y - 39, 10.5, "F2", blue, max_chars=18))
-
-    y = 548
-    y = section_title(ops, "Loan Details", y)
-    details = [
-        ("Loan ID", loan_id),
-        ("Status", loan.get("status")),
-        ("Annual Rate", f"{loan.get('annual_rate')}% p.a."),
-        ("Term", f"{loan.get('term_months')} months"),
-        ("Penalties", pdf_money(summary.get("penalties"))),
-        ("Statement Date", pdf_date(date.today().isoformat())),
-    ]
-    for idx, (label, value) in enumerate(details):
-        x = margin + (idx % 3) * 170
-        row_y = y - (idx // 3) * 34
-        info_pair(ops, label, value, x, row_y, 150)
-
-    y = 444
-    y = section_title(ops, "Repayment Schedule", y)
-    cols = [
-        ("#", margin + 8, 28, "left"),
-        ("Due Date", margin + 42, 78, "left"),
-        ("Principal", margin + 156, 74, "right"),
-        ("Interest", margin + 245, 64, "right"),
-        ("Payment", margin + 330, 74, "right"),
-        ("Balance", margin + 438, 74, "right"),
-    ]
-    def table_header(o, y_pos):
-        o.append(pdf_rect(margin, y_pos - 18, width, 18, fill=(235, 240, 247), stroke=border))
-        for label, x, _, align in cols:
-            o.append(pdf_text(label, x, y_pos - 12, 7.5, "F2", blue, align))
+    def table_header(y_pos, cols):
+        ops.append(pdf_rect(margin, y_pos - 18, width, 18, fill=(226, 232, 240), stroke=border, line_width=0.4))
+        for col in cols:
+            ops.append(pdf_text(col[0], col[1], y_pos - 12, 7.1, "F2", navy, col[2], max_chars=col[3] if len(col) > 3 else None))
         return y_pos - 18
 
-    page_no = 1
-    y = table_header(ops, y)
-    row_h = 18
-    schedule = data["schedule"]
-    if schedule:
-        for row in schedule:
-            if y < 82:
-                add_footer(ops, page_no)
-                pages.append("\n".join(ops))
-                page_no += 1
-                ops = add_header(page_no)
-                y = 752
-                y = section_title(ops, "Repayment Schedule Continued", y)
-                y = table_header(ops, y)
-            fill = (255, 255, 255) if int(row.get("installment") or 0) % 2 else (250, 252, 255)
-            ops.append(pdf_rect(margin, y - row_h, width, row_h, fill=fill, stroke=border, line_width=0.35))
-            values = [
-                row.get("installment"),
-                pdf_date(row.get("due_date")),
-                f"{float(row.get('principal') or 0):,.2f}",
-                f"{float(row.get('interest') or 0):,.2f}",
-                f"{float(row.get('repayment') or 0):,.2f}",
-                f"{float(row.get('balance') or 0):,.2f}",
-            ]
-            for value, (_, x, _, align) in zip(values, cols):
-                ops.append(pdf_text(value, x, y - 12, 7.5, "F1", blue, align, max_chars=16))
-            y -= row_h
-    else:
-        ops.append(pdf_rect(margin, y - 28, width, 28, fill=(255, 255, 255), stroke=border))
-        ops.append(pdf_text("Schedule will be available after approval.", margin + 10, y - 18, 8, "F1", muted))
-        y -= 34
-
-    y -= 22
-    if y < 170:
+    def start_new_page(title=None):
+        nonlocal ops, page_no, y
         add_footer(ops, page_no)
         pages.append("\n".join(ops))
         page_no += 1
         ops = add_header(page_no)
-        y = 752
-    y = section_title(ops, "Repayments Received", y)
-    repay_cols = [
-        ("Date", margin + 8, "left"),
-        ("Reference", margin + 124, "left"),
-        ("Method", margin + 314, "left"),
-        ("Amount", margin + 500, "right"),
+        y = 724
+        if title:
+            y = section_title(title, y)
+
+    def ensure_space(required, title=None):
+        if y - required < 58:
+            start_new_page(title)
+
+    ops = add_header(page_no)
+    y = 736
+
+    ops.extend([
+        pdf_rect(margin, y - 92, 252, 92, fill=soft, stroke=border),
+        pdf_rect(margin + 267, y - 92, 252, 92, fill=soft, stroke=border),
+        pdf_text("BORROWER PROFILE", margin + 14, y - 18, 8, "F2", teal),
+        pdf_text("LOAN SNAPSHOT", margin + 281, y - 18, 8, "F2", teal),
+    ])
+    info_pair("Borrower", loan.get("member_name"), margin + 14, y - 39, 110)
+    info_pair("Phone", loan.get("member_phone"), margin + 138, y - 39, 94)
+    info_pair("Address", loan.get("member_address"), margin + 14, y - 71, 218)
+    info_pair("Loan ID", loan_id, margin + 281, y - 39, 82)
+    info_pair("Purpose", loan.get("purpose") or "-", margin + 376, y - 39, 100)
+    info_pair("Customer Type", "External Borrower" if loan.get("member_type") == "borrower" else "Member", margin + 281, y - 71, 92)
+    draw_badge(ops, loan.get("status"), margin + 438, y - 57, 80)
+
+    y = 622
+    card_w = (width - 18) / 4
+    cards = [
+        ("Principal", pdf_money(loan.get("amount")), teal),
+        ("Total Repayable", pdf_money(total_repayable), blue),
+        ("Total Paid", pdf_money(total_paid), green),
+        ("Outstanding", pdf_money(outstanding), red if outstanding > 0 else green),
     ]
-    ops.append(pdf_rect(margin, y - 18, width, 18, fill=(235, 240, 247), stroke=border))
-    for label, x, align in repay_cols:
-        ops.append(pdf_text(label, x, y - 12, 7.5, "F2", blue, align))
-    y -= 18
-    if data["repays"]:
-        for idx, row in enumerate(data["repays"]):
-            if y < 82:
-                add_footer(ops, page_no)
-                pages.append("\n".join(ops))
-                page_no += 1
-                ops = add_header(page_no)
-                y = 752
-                y = section_title(ops, "Repayments Received Continued", y)
-            fill = (255, 255, 255) if idx % 2 == 0 else (250, 252, 255)
-            ops.append(pdf_rect(margin, y - row_h, width, row_h, fill=fill, stroke=border, line_width=0.35))
-            repay_values = [
-                pdf_date(row.get("payment_date")),
-                row.get("reference") or row.get("id"),
-                row.get("method"),
-                f"{float(row.get('amount') or 0):,.2f}",
+    for i, (label, value, tone) in enumerate(cards):
+        metric_card(label, value, margin + i * (card_w + 6), y, card_w, tone)
+
+    y = 538
+    ops.extend([
+        pdf_rect(margin, y - 42, width, 42, fill=(255, 255, 255), stroke=border),
+        pdf_text("PAYMENT PROGRESS", margin + 14, y - 17, 7, "F2", muted),
+        pdf_text(f"{progress * 100:.1f}% paid", right - 14, y - 17, 8, "F2", green if progress >= 1 else teal, "right"),
+        pdf_rect(margin + 14, y - 31, width - 28, 7, fill=(226, 232, 240)),
+    ])
+    if progress > 0:
+        ops.append(pdf_rect(margin + 14, y - 31, (width - 28) * progress, 7, fill=green if progress >= 1 else teal))
+    ops.append(pdf_text(f"Paid {pdf_money(total_paid)} of {pdf_money(total_repayable)}", margin + 14, y - 38, 6.8, "F1", muted, max_chars=58))
+
+    y = 470
+    y = section_title("Loan Terms", y)
+    detail_items = [
+        ("Application Date", pdf_date(loan.get("applied_date"))),
+        ("Approved Date", pdf_date(loan.get("approved_date"))),
+        ("Disbursed Date", pdf_date(loan.get("disbursed_date"))),
+        ("Monthly Rate", f"{float(loan.get('annual_rate') or 0):.2f}%"),
+        ("Method", short_status(loan.get("method") or "flat")),
+        ("Term", f"{int(loan.get('term_months') or 0)} months"),
+        ("Total Interest", pdf_money(total_interest)),
+        ("Penalties", pdf_money(penalties)),
+        ("Installments Left", str(summary.get("installments_left") or 0)),
+    ]
+    for idx, (label, value) in enumerate(detail_items):
+        x = margin + (idx % 3) * 173
+        row_y = y - (idx // 3) * 34
+        info_pair(label, value, x, row_y, 152)
+    y -= ((len(detail_items) + 2) // 3) * 34 + 4
+
+    if guarantors:
+        ensure_space(94, "Guarantors")
+        y = section_title("Guarantors", y)
+        guarantor_cols = [
+            ("Name", margin + 10, "left", 24),
+            ("Phone", margin + 194, "left", 18),
+            ("Guaranteed", margin + 393, "right", 16),
+            ("Status", margin + 430, "left", 16),
+        ]
+        y = table_header(y, guarantor_cols)
+        for idx, row in enumerate(guarantors):
+            if y - 18 < 58:
+                start_new_page("Guarantors Continued")
+                y = table_header(y, guarantor_cols)
+            fill = (255, 255, 255) if idx % 2 == 0 else soft
+            ops.append(pdf_rect(margin, y - 18, width, 18, fill=fill, stroke=border, line_width=0.3))
+            values = [
+                row.get("guarantor_name") or "-",
+                row.get("guarantor_phone") or "-",
+                money_plain(row.get("amount")),
+                short_status(row.get("status")),
             ]
-            for value, (_, x, align) in zip(repay_values, repay_cols):
-                ops.append(pdf_text(value, x, y - 12, 7.5, "F1", blue, align, max_chars=30))
-            y -= row_h
+            for value, col in zip(values, guarantor_cols):
+                color = green if col[0] == "Status" and str(value).lower() == "active" else slate
+                ops.append(pdf_text(value, col[1], y - 12, 7.2, "F1", color, col[2], max_chars=col[3]))
+            y -= 18
+        y -= 18
+
+    ensure_space(130, "Repayment Schedule")
+    y = section_title("Repayment Schedule", y)
+    ops.append(pdf_text("Schedule balances below apply recorded repayments against installments in due-date order.", margin, y + 4, 7.2, "F1", muted, max_chars=86))
+    y -= 10
+    schedule_cols = [
+        ("No.", margin + 10, "left", 5),
+        ("Due Date", margin + 44, "left", 14),
+        ("Scheduled", margin + 224, "right", 14),
+        ("Paid", margin + 318, "right", 14),
+        ("Balance After", margin + 444, "right", 16),
+        ("State", margin + 474, "left", 11),
+    ]
+    y = table_header(y, schedule_cols)
+    if schedule:
+        remaining_pool = max(0.0, total_paid)
+        cumulative_paid = 0.0
+        for idx, row in enumerate(schedule):
+            if y - 18 < 58:
+                start_new_page("Repayment Schedule Continued")
+                y = table_header(y, schedule_cols)
+            scheduled_due = float(row.get("repayment") or 0)
+            paid_for_row = min(scheduled_due, remaining_pool)
+            remaining_pool = max(0.0, remaining_pool - paid_for_row)
+            cumulative_paid += paid_for_row
+            balance_after = max(0.0, total_repayable - cumulative_paid)
+            if paid_for_row + 0.01 >= scheduled_due:
+                state = "Paid"
+                state_color = green
+            elif paid_for_row > 0:
+                state = "Partial"
+                state_color = amber
+            else:
+                state = "Pending"
+                state_color = muted
+            fill = (255, 255, 255) if idx % 2 == 0 else soft
+            ops.append(pdf_rect(margin, y - 18, width, 18, fill=fill, stroke=border, line_width=0.3))
+            values = [
+                row.get("installment"),
+                pdf_date(row.get("due_date")),
+                money_plain(scheduled_due),
+                money_plain(paid_for_row),
+                money_plain(balance_after),
+                state,
+            ]
+            for value, col in zip(values, schedule_cols):
+                color = state_color if col[0] == "State" else slate
+                font = "F2" if col[0] == "State" else "F1"
+                ops.append(pdf_text(value, col[1], y - 12, 7.2, font, color, col[2], max_chars=col[3]))
+            y -= 18
     else:
-        ops.append(pdf_rect(margin, y - 28, width, 28, fill=(255, 255, 255), stroke=border))
-        ops.append(pdf_text("No repayments recorded.", margin + 10, y - 18, 8, "F1", muted))
+        ops.append(pdf_rect(margin, y - 30, width, 30, fill=(255, 255, 255), stroke=border))
+        ops.append(pdf_text("Schedule will be available after approval or disbursement.", margin + 12, y - 19, 8, "F1", muted))
+        y -= 36
+
+    y -= 22
+    ensure_space(100, "Repayments Received")
+    y = section_title("Repayments Received", y)
+    repay_cols = [
+        ("Date", margin + 10, "left", 14),
+        ("Reference", margin + 100, "left", 28),
+        ("Method", margin + 304, "left", 18),
+        ("Amount", right - 10, "right", 16),
+    ]
+    y = table_header(y, repay_cols)
+    if repayments:
+        for idx, row in enumerate(repayments):
+            if y - 18 < 58:
+                start_new_page("Repayments Received Continued")
+                y = table_header(y, repay_cols)
+            fill = (255, 255, 255) if idx % 2 == 0 else soft
+            ops.append(pdf_rect(margin, y - 18, width, 18, fill=fill, stroke=border, line_width=0.3))
+            values = [
+                pdf_date(row.get("payment_date")),
+                row.get("reference") or row.get("id") or "-",
+                short_status(row.get("method") or "cash"),
+                money_plain(row.get("amount")),
+            ]
+            for value, col in zip(values, repay_cols):
+                ops.append(pdf_text(value, col[1], y - 12, 7.2, "F1", slate, col[2], max_chars=col[3]))
+            y -= 18
+    else:
+        ops.append(pdf_rect(margin, y - 30, width, 30, fill=(255, 255, 255), stroke=border))
+        ops.append(pdf_text("No repayments have been recorded for this loan.", margin + 12, y - 19, 8, "F1", muted))
+        y -= 36
+
+    y -= 20
+    ensure_space(72, "Statement Notes")
+    ops.extend([
+        pdf_rect(margin, y - 58, width, 58, fill=panel, stroke=border),
+        pdf_text("STATEMENT NOTES", margin + 12, y - 17, 7, "F2", muted),
+        pdf_text("This document is system-generated and reflects records available at the time of issue.", margin + 12, y - 32, 7.4, "F1", slate, max_chars=86),
+        pdf_text("For printed copies, confirm the statement reference with the office before acting on the balance.", margin + 12, y - 45, 7.4, "F1", slate, max_chars=86),
+        pdf_text("Authorized by", right - 182, y - 20, 7, "F2", muted),
+        pdf_line(right - 182, y - 41, right - 32, y - 41, (148, 163, 184), 0.6),
+        pdf_text("Jodala Microfinance", right - 107, y - 53, 7.2, "F1", muted, "center", max_chars=28),
+    ])
 
     add_footer(ops, page_no)
     pages.append("\n".join(ops))

@@ -843,3 +843,166 @@ td {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+.danger-soft {
+  color: var(--danger);
+  border-color: rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.08);
+}
+
+.expenses-page,
+.expense-panel {
+  min-width: 0;
+}
+
+.expenses-header,
+.expense-table-head {
+  align-items: flex-start;
+}
+
+.expense-page-actions {
+  margin-left: auto;
+}
+
+.expense-filter-bar {
+  flex: 1 1 620px;
+  justify-content: flex-end;
+}
+
+.expense-filter-bar input,
+.expense-filter-bar select {
+  min-width: 150px;
+  max-width: 220px;
+  flex: 1 1 160px;
+}
+
+.expense-filter-bar input[type="search"] {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.expense-row-actions {
+  min-width: 132px;
+}
+
+.expense-modal-form textarea {
+  resize: vertical;
+}
+
+.modal-actions-inline {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .content-area {
+    padding: 10px;
+  }
+
+  .side-nav {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .side-nav nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .signed-user {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panel,
+  .metric-card {
+    padding: 12px;
+  }
+
+  th,
+  td {
+    padding: 8px;
+  }
+
+  .modal-overlay {
+    padding: 8px;
+  }
+
+  .modal-card {
+    max-height: calc(100dvh - 16px);
+    border-radius: 12px;
+  }
+
+  .modal-head,
+  .modal-foot,
+  .modal-body {
+    padding: 12px;
+  }
+
+  .expense-page-actions,
+  .expense-filter-bar {
+    width: 100%;
+    margin-left: 0;
+    justify-content: stretch;
+  }
+
+  .expense-page-actions .ghost-btn,
+  .expense-page-actions .primary-btn,
+  .expense-filter-bar input,
+  .expense-filter-bar select {
+    min-width: 100%;
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  .modal-actions-inline button {
+    flex: 1 1 140px;
+  }
+
+  .toast-stack {
+    left: 10px;
+    right: 10px;
+  }
+
+  .toast {
+    max-width: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-area {
+    padding: 8px;
+  }
+
+  .page-head h2 {
+    font-size: 20px;
+  }
+
+  .panel,
+  .metric-card {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .table-pager {
+    justify-content: stretch;
+  }
+
+  .table-pager > button,
+  .page-buttons {
+    flex: 1 1 auto;
+  }
+
+  .page-buttons {
+    justify-content: center;
+  }
+}

@@ -163,3 +163,51 @@ def test_admin_granted_permission_allows_officer_to_do_admin_only_action(client)
     )
     assert created.status_code == 201
     assert created.get_json()["data"]["name"] == "Officer Managed Product"
+
+
+def test_expense_edit_and_delete_updates_main_account_balance(client):
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    initial = client.get("/api/dashboard", headers=headers)
+    assert initial.status_code == 200
+    starting_balance = float(initial.get_json()["data"]["stats"]["account_current_balance"] or 0)
+
+    funded = client.post("/api/settings/account/add", json={"amount": 1000}, headers=headers)
+    assert funded.status_code == 200
+
+    account = client.post(
+        "/api/expenses/accounts",
+        json={"name": "Pytest Office Costs", "code": "TST-OFF", "description": "Test expenses"},
+        headers=headers,
+    )
+    assert account.status_code == 201
+    account_id = account.get_json()["data"]["id"]
+
+    created = client.post(
+        "/api/expenses/transactions",
+        json={"account_id": account_id, "amount": 100, "expense_date": "2026-05-30", "payee": "Printer Shop"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    expense_id = created.get_json()["data"]["id"]
+
+    after_create = client.get("/api/dashboard", headers=headers)
+    assert float(after_create.get_json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 900)
+
+    updated = client.put(
+        f"/api/expenses/transactions/{expense_id}",
+        json={"account_id": account_id, "amount": 250, "expense_date": "2026-05-30", "payee": "Printer Shop", "notes": "Adjusted"},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    assert float(updated.get_json()["data"]["amount"] or 0) == pytest.approx(250)
+
+    after_update = client.get("/api/dashboard", headers=headers)
+    assert float(after_update.get_json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 750)
+
+    deleted = client.delete(f"/api/expenses/transactions/{expense_id}", headers=headers)
+    assert deleted.status_code == 200
+
+    after_delete = client.get("/api/dashboard", headers=headers)
+    assert float(after_delete.get_json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 1000)

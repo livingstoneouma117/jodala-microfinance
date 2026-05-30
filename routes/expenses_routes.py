@@ -205,6 +205,75 @@ def create_expense_transaction():
 
 
 
+
+
+@bp.route("/api/expenses/transactions/<expense_id>", methods=["PUT", "PATCH"])
+@login_required
+@roles_required("admin", "accountant")
+def update_expense_transaction(expense_id):
+    d = request.json or {}
+    if not d.get("account_id") or not d.get("amount"):
+        return error("account_id and amount are required")
+
+    try:
+        account_id = int(d.get("account_id"))
+        amount = float(d.get("amount") or 0)
+    except (TypeError, ValueError):
+        return error("Invalid account or amount")
+
+    if amount <= 0:
+        return error("Amount must be greater than zero")
+
+    expense_date = clean_date(d.get("expense_date"), date.today().isoformat())
+    reference = (d.get("reference") or "").strip() or None
+    payee = (d.get("payee") or "").strip() or None
+    notes = (d.get("notes") or "").strip() or None
+
+    db = get_db()
+    existing = row_to_dict(db.execute(
+        "SELECT * FROM expense_transactions WHERE id=?",
+        (expense_id,),
+    ).fetchone())
+    if not existing:
+        db.close()
+        return error("Expense not found", 404)
+
+    account = row_to_dict(db.execute(
+        "SELECT * FROM expense_accounts WHERE id=?",
+        (account_id,),
+    ).fetchone())
+    if not account:
+        db.close()
+        return error("Expense account not found")
+    if not int(account.get("active") or 0) and account_id != int(existing.get("account_id") or 0):
+        db.close()
+        return error("Expense account is inactive")
+
+    db.execute(
+        """UPDATE expense_transactions
+           SET account_id=?, amount=?, expense_date=?, reference=?, payee=?, notes=?
+           WHERE id=?""",
+        (account_id, amount, expense_date, reference, payee, notes, expense_id),
+    )
+    old_amount = float(existing.get("amount") or 0)
+    adjust_account_opening_balance(db, old_amount - amount)
+    db.commit()
+
+    row = row_to_dict(db.execute(
+        """SELECT et.*, ea.name as account_name, ea.code as account_code, u.name as recorded_by_name
+           FROM expense_transactions et
+           JOIN expense_accounts ea ON et.account_id=ea.id
+           LEFT JOIN users u ON et.recorded_by=u.id
+           WHERE et.id=?""",
+        (expense_id,),
+    ).fetchone())
+    db.close()
+    audit(
+        f"Edited expense {expense_id}",
+        "Expenses",
+        f"KES {old_amount:,.2f} -> KES {amount:,.2f} - {row.get('account_name')}",
+    )
+    return success(row, "Expense updated")
 @bp.route("/api/expenses/transactions/<expense_id>", methods=["DELETE"])
 @login_required
 @roles_required("admin", "accountant")
@@ -222,6 +291,7 @@ def delete_expense_transaction(expense_id):
         return error("Expense not found", 404)
 
     db.execute("DELETE FROM expense_transactions WHERE id=?", (expense_id,))
+    adjust_account_opening_balance(db, float(row.get("amount") or 0))
     db.commit()
     db.close()
     audit(

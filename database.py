@@ -572,6 +572,18 @@ def _migrate_schema(c):
     if "member_type" not in member_cols:
         c.execute("ALTER TABLE members ADD COLUMN member_type TEXT NOT NULL DEFAULT 'member'")
 
+    loan_cols = {row[1] for row in c.execute("PRAGMA table_info(loans)").fetchall()}
+    if loan_cols and "penalties" not in loan_cols:
+        c.execute("ALTER TABLE loans ADD COLUMN penalties REAL NOT NULL DEFAULT 0")
+
+    schedule_cols = {row[1] for row in c.execute("PRAGMA table_info(loan_schedule)").fetchall()}
+    if schedule_cols and "penalty" not in schedule_cols:
+        c.execute("ALTER TABLE loan_schedule ADD COLUMN penalty REAL NOT NULL DEFAULT 0")
+
+    product_cols = {row[1] for row in c.execute("PRAGMA table_info(loan_products)").fetchall()}
+    if product_cols and "penalty_rate" not in product_cols:
+        c.execute("ALTER TABLE loan_products ADD COLUMN penalty_rate REAL NOT NULL DEFAULT 5")
+
     try:
         guarantor_cols = {row[1] for row in c.execute("PRAGMA table_info(guarantors)").fetchall()}
         if guarantor_cols:

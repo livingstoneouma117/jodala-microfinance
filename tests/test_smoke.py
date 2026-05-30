@@ -58,3 +58,23 @@ def test_report_export_requires_auth_and_returns_csv(client):
     assert response.status_code == 200
     assert response.mimetype == "text/csv"
     assert b"ID,Name" in response.data
+
+
+def test_overdue_penalties_are_applied_to_outstanding(client):
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/api/loans?status=all&limit=100", headers=headers)
+    assert response.status_code == 200
+    loans = response.get_json()["data"]["loans"]
+    penalized = [loan for loan in loans if float(loan.get("penalties") or 0) > 0]
+    assert penalized
+
+    loan = penalized[0]
+    assert float(loan["outstanding"]) >= float(loan["penalties"])
+
+    detail = client.get(f"/api/loans/{loan['id']}", headers=headers)
+    assert detail.status_code == 200
+    payload = detail.get_json()["data"]
+    assert float(payload["summary"]["penalties"]) == float(loan["penalties"])
+    assert any(float(row.get("penalty") or 0) > 0 for row in payload["schedule"])

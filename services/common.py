@@ -735,6 +735,8 @@ def make_simple_pdf(lines, title="Loan Statement") -> bytes:
 
 def get_loan_statement_data(loan_id):
     db = get_db()
+    refresh_loan_statuses(db)
+    db.commit()
     loan = row_to_dict(db.execute(
         """SELECT l.*, m.name as member_name, m.phone as member_phone, m.address as member_address, m.member_type
            FROM loans l JOIN members m ON l.member_id=m.id WHERE l.id=?""", (loan_id,)
@@ -986,10 +988,11 @@ def build_statement_pdf(loan_id, data) -> bytes:
     schedule_cols = [
         ("No.", margin + 10, "left", 5),
         ("Due Date", margin + 44, "left", 14),
-        ("Scheduled", margin + 224, "right", 14),
-        ("Paid", margin + 318, "right", 14),
-        ("Balance After", margin + 444, "right", 16),
-        ("State", margin + 474, "left", 11),
+        ("Scheduled", margin + 194, "right", 14),
+        ("Penalty", margin + 276, "right", 14),
+        ("Paid", margin + 350, "right", 14),
+        ("Balance After", margin + 452, "right", 16),
+        ("State", margin + 478, "left", 11),
     ]
     y = table_header(y, schedule_cols)
     if schedule:
@@ -1019,6 +1022,7 @@ def build_statement_pdf(loan_id, data) -> bytes:
                 row.get("installment"),
                 pdf_date(row.get("due_date")),
                 money_plain(scheduled_due),
+                money_plain(row.get("penalty")),
                 money_plain(paid_for_row),
                 money_plain(balance_after),
                 state,
@@ -1096,8 +1100,116 @@ def clean_date(value, fallback=None) -> str:
     except ValueError:
         return date.today().isoformat()
 
+
+def _date_from_value(value):
+    raw = str(value or "").strip()[:10]
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def schedule_penalty_amount(schedule_row: dict, penalty_rate_pct: float, as_of: date | None = None) -> float:
+    rate = float(penalty_rate_pct or 0)
+    if rate <= 0:
+        return 0.0
+    due_date = _date_from_value(schedule_row.get("due_date"))
+    if not due_date:
+        return 0.0
+    if int(schedule_row.get("paid") or 0):
+        end_date = _date_from_value(schedule_row.get("paid_date"))
+        if not end_date:
+            return 0.0
+    else:
+        end_date = as_of or date.today()
+    if end_date <= due_date:
+        return 0.0
+    days_overdue = (end_date - due_date).days
+    months_overdue = max(1, days_overdue // 30)
+    return round(float(schedule_row.get("repayment") or 0) * rate / 100 * months_overdue, 2)
+
+
+def recalculate_loan_penalties(db, loan_id: str | None = None) -> None:
+    params = []
+    where = ""
+    if loan_id:
+        where = "WHERE l.id=?"
+        params.append(loan_id)
+    loans = rows_to_list(db.execute(
+        f"""SELECT l.id, COALESCE(lp.penalty_rate, 5) AS penalty_rate
+            FROM loans l
+            LEFT JOIN loan_products lp ON lp.id=l.product_id
+            {where}""",
+        params,
+    ).fetchall())
+    for loan in loans:
+        rate = float(loan.get("penalty_rate") or 0)
+        rows = rows_to_list(db.execute(
+            "SELECT id,due_date,repayment,paid,paid_date FROM loan_schedule WHERE loan_id=? ORDER BY installment",
+            (loan["id"],),
+        ).fetchall())
+        total_penalty = 0.0
+        for row in rows:
+            penalty = schedule_penalty_amount(row, rate)
+            total_penalty += penalty
+            db.execute("UPDATE loan_schedule SET penalty=? WHERE id=?", (penalty, row["id"]))
+        db.execute("UPDATE loans SET penalties=? WHERE id=?", (round(total_penalty, 2), loan["id"]))
+
+def sync_repayment_allocations(db, loan_id: str | None = None) -> None:
+    if loan_id:
+        loan_ids = [loan_id]
+    else:
+        loan_ids = [row["id"] for row in rows_to_list(db.execute("SELECT id FROM loans").fetchall())]
+    for current_loan_id in loan_ids:
+        total_paid = db.execute(
+            "SELECT COALESCE(SUM(amount),0) FROM repayments WHERE loan_id=?",
+            (current_loan_id,),
+        ).fetchone()[0]
+        payment_rows = rows_to_list(db.execute(
+            """SELECT amount,payment_date
+               FROM repayments
+               WHERE loan_id=? AND COALESCE(type,'installment') <> 'penalty'
+               ORDER BY payment_date, created_at, id""",
+            (current_loan_id,),
+        ).fetchall())
+        db.execute("UPDATE loan_schedule SET paid=0, paid_date=NULL WHERE loan_id=?", (current_loan_id,))
+        rows = rows_to_list(db.execute(
+            "SELECT id,repayment FROM loan_schedule WHERE loan_id=? ORDER BY installment",
+            (current_loan_id,),
+        ).fetchall())
+        available = 0.0
+        payment_idx = 0
+        reached_date = None
+        for row in rows:
+            due = float(row["repayment"] or 0)
+            while available + 0.01 < due and payment_idx < len(payment_rows):
+                payment = payment_rows[payment_idx]
+                available += float(payment.get("amount") or 0)
+                reached_date = clean_date(payment.get("payment_date"), reached_date)
+                payment_idx += 1
+            if available + 0.01 >= due:
+                db.execute("UPDATE loan_schedule SET paid=1, paid_date=? WHERE id=?", (reached_date, row["id"]))
+                available -= due
+            else:
+                break
+        db.execute("UPDATE loans SET total_paid=? WHERE id=?", (total_paid, current_loan_id))
+
+
 def refresh_loan_statuses(db) -> None:
+    sync_repayment_allocations(db)
+    recalculate_loan_penalties(db)
     today = date.today().isoformat()
+    db.execute(
+        """UPDATE loans
+           SET status='active'
+           WHERE status='completed'
+             AND total_paid + 0.01 < (
+                 SELECT COALESCE(SUM(s.repayment),0) + COALESCE(loans.penalties,0)
+                 FROM loan_schedule s WHERE s.loan_id=loans.id
+             )"""
+    )
     db.execute(
         """UPDATE loans
            SET status='overdue'
@@ -1118,50 +1230,37 @@ def refresh_loan_statuses(db) -> None:
              )""",
         (today,),
     )
+    db.execute(
+        """UPDATE loans
+           SET status='completed'
+           WHERE status IN ('active','overdue')
+             AND (
+                 SELECT COALESCE(SUM(s.repayment),0) + COALESCE(loans.penalties,0)
+                 FROM loan_schedule s WHERE s.loan_id=loans.id
+             ) > 0
+             AND total_paid + 0.01 >= (
+                 SELECT COALESCE(SUM(s.repayment),0) + COALESCE(loans.penalties,0)
+                 FROM loan_schedule s WHERE s.loan_id=loans.id
+             )"""
+    )
+
 
 def allocate_repayment_to_schedule(db, loan_id: str, paid_date: str | None = None) -> None:
-    paid_date = clean_date(paid_date)
-    total_paid = db.execute(
-        "SELECT COALESCE(SUM(amount),0) FROM repayments WHERE loan_id=?",
-        (loan_id,),
-    ).fetchone()[0]
-    db.execute("UPDATE loan_schedule SET paid=0, paid_date=NULL WHERE loan_id=?", (loan_id,))
-    rows = rows_to_list(db.execute(
-        "SELECT id,repayment FROM loan_schedule WHERE loan_id=? ORDER BY installment",
-        (loan_id,),
-    ).fetchall())
-    remaining = float(total_paid or 0)
-    for row in rows:
-        due = float(row["repayment"] or 0)
-        if remaining + 0.01 >= due:
-            db.execute("UPDATE loan_schedule SET paid=1, paid_date=? WHERE id=?", (paid_date, row["id"]))
-            remaining -= due
-        else:
-            break
-    total_repayable = db.execute(
-        "SELECT COALESCE(SUM(repayment),0) FROM loan_schedule WHERE loan_id=?",
-        (loan_id,),
-    ).fetchone()[0]
-    loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
-    if loan:
-        status = loan["status"]
-        if total_repayable and float(total_paid or 0) + 0.01 >= float(total_repayable):
-            status = "completed"
-        elif status == "completed" and float(total_paid or 0) + 0.01 < float(total_repayable):
-            status = "active"
-        db.execute("UPDATE loans SET total_paid=?, status=? WHERE id=?", (total_paid, status, loan_id))
-        refresh_loan_statuses(db)
+    sync_repayment_allocations(db, loan_id)
+    recalculate_loan_penalties(db, loan_id)
+    refresh_loan_statuses(db)
 
 def loan_risk_snapshot(db, loan_id: str) -> dict:
     today = date.today().isoformat()
     row = row_to_dict(db.execute(
         """SELECT
-             COALESCE(SUM(CASE WHEN paid=0 AND due_date < ? THEN repayment ELSE 0 END),0) AS amount_in_arrears,
+             COALESCE(SUM(CASE WHEN paid=0 AND due_date < ? THEN repayment + COALESCE(penalty,0) ELSE 0 END),0) AS amount_in_arrears,
+             COALESCE(SUM(CASE WHEN due_date < ? THEN COALESCE(penalty,0) ELSE 0 END),0) AS penalty_due,
              COALESCE(COUNT(CASE WHEN paid=0 AND due_date < ? THEN 1 END),0) AS overdue_installments,
              MIN(CASE WHEN paid=0 AND due_date < ? THEN due_date END) AS oldest_due_date,
              MIN(CASE WHEN paid=0 THEN due_date END) AS next_due_date
            FROM loan_schedule WHERE loan_id=?""",
-        (today, today, today, loan_id),
+        (today, today, today, today, loan_id),
     ).fetchone())
     oldest = row.get("oldest_due_date")
     days = 0
@@ -1172,6 +1271,7 @@ def loan_risk_snapshot(db, loan_id: str) -> dict:
             days = 0
     return {
         "amount_in_arrears": float(row.get("amount_in_arrears") or 0),
+        "penalty_due": float(row.get("penalty_due") or 0),
         "overdue_installments": int(row.get("overdue_installments") or 0),
         "oldest_due_date": oldest,
         "next_due_date": row.get("next_due_date"),

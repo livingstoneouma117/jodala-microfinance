@@ -73,7 +73,7 @@ def create_repayment():
     ).fetchall())
     if not schedule:
         db.close(); return error("Loan has no repayment schedule. Disburse it first.")
-    total_repayable = sum(float(r["repayment"] or 0) for r in schedule)
+    total_repayable = sum(float(r["repayment"] or 0) for r in schedule) + float(loan.get("penalties") or 0)
     outstanding = max(0, total_repayable - float(loan["total_paid"] or 0))
     if amount > outstanding + 0.01:
         db.close(); return error(f"Payment exceeds outstanding balance of KES {outstanding:,.2f}")

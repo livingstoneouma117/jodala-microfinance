@@ -40,15 +40,15 @@ def dashboard():
           COALESCE(SUM(CASE WHEN days_in_arrears >= 30 THEN outstanding ELSE 0 END),0) AS par30_amount
         FROM (
           SELECT l.id,
-                 COALESCE(s.total_repayable, l.amount) AS total_repayable,
-                 MAX(COALESCE(s.total_repayable, l.amount) - l.total_paid, 0) AS outstanding,
+                 COALESCE(s.total_repayable, l.amount) + COALESCE(l.penalties,0) AS total_repayable,
+                 MAX(COALESCE(s.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) AS outstanding,
                  COALESCE(s.amount_in_arrears,0) AS amount_in_arrears,
                  s.days_in_arrears AS days_in_arrears
           FROM loans l
           LEFT JOIN (
             SELECT loan_id,
                    SUM(repayment) AS total_repayable,
-                   SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment ELSE 0 END) AS amount_in_arrears,
+                   SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment + COALESCE(penalty,0) ELSE 0 END) AS amount_in_arrears,
                    CAST(julianday(date('now')) - julianday(MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END)) AS INTEGER) AS days_in_arrears
             FROM loan_schedule
             GROUP BY loan_id

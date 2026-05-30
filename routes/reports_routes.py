@@ -13,8 +13,8 @@ def report_portfolio():
     db.commit()
     rows = rows_to_list(db.execute(
         """SELECT l.*, m.name as member_name,
-           COALESCE(risk.total_repayable, l.amount) as total_repayable,
-           MAX(COALESCE(risk.total_repayable, l.amount) - l.total_paid, 0) as outstanding,
+           COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) as total_repayable,
+           MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) as outstanding,
            COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
            COALESCE(risk.overdue_installments,0) as overdue_installments,
            COALESCE(CAST(julianday(date('now')) - julianday(risk.oldest_due_date) AS INTEGER),0) as days_in_arrears,
@@ -26,7 +26,7 @@ def report_portfolio():
                     SUM(repayment) as total_repayable,
                     MIN(CASE WHEN paid=0 THEN due_date END) as next_due_date,
                     MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END) as oldest_due_date,
-                    SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment ELSE 0 END) as amount_in_arrears,
+                    SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment + COALESCE(penalty,0) ELSE 0 END) as amount_in_arrears,
                     COUNT(CASE WHEN paid=0 AND due_date < date('now') THEN 1 END) as overdue_installments
              FROM loan_schedule
              GROUP BY loan_id
@@ -45,14 +45,14 @@ def report_portfolio():
            COUNT(*) as total_loans
            FROM (
                SELECT l.id, l.amount, l.total_paid, l.penalties, l.disbursed_date,
-                       COALESCE(risk.total_repayable, l.amount) as total_repayable,
+                       COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) as total_repayable,
                        COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
                        risk.days_in_arrears
                FROM loans l
                LEFT JOIN (
                  SELECT loan_id,
                         SUM(repayment) as total_repayable,
-                        SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment ELSE 0 END) as amount_in_arrears,
+                        SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment + COALESCE(penalty,0) ELSE 0 END) as amount_in_arrears,
                         CAST(julianday(date('now')) - julianday(MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END)) AS INTEGER) as days_in_arrears
                  FROM loan_schedule
                  GROUP BY loan_id
@@ -204,6 +204,8 @@ def update_dividend_status(run_id):
 def export_report(report_type):
     import csv, io
     db = get_db()
+    refresh_loan_statuses(db)
+    db.commit()
     export_format = (request.args.get("format") or "csv").strip().lower()
     rows = []
     headers = []
@@ -212,7 +214,7 @@ def export_report(report_type):
         headers = ["ID","Member","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"]
         rows = rows_to_list(db.execute(
             """SELECT l.id,m.name,l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
-                      (COALESCE(SUM(s.repayment), l.amount)-l.total_paid) as outstanding,l.penalties
+                      (COALESCE(SUM(s.repayment), l.amount)+COALESCE(l.penalties,0)-l.total_paid) as outstanding,l.penalties
                FROM loans l
                JOIN members m ON l.member_id=m.id
                LEFT JOIN loan_schedule s ON s.loan_id=l.id

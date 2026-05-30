@@ -135,6 +135,7 @@ function LoanDetails({ loanId, onChanged }) {
         <div className="surface-card"><span>Borrower</span><strong>{loan.member_name || loan.member_id || "-"}</strong></div>
         <div className="surface-card"><span>Principal</span><strong>{formatKES(loan.amount)}</strong></div>
         <div className="surface-card"><span>Total Repaid</span><strong>{formatKES(loan.total_paid)}</strong></div>
+        <div className="surface-card"><span>Penalties</span><strong>{formatKES(summary.penalties)}</strong></div>
         <div className="surface-card"><span>Outstanding</span><strong>{formatKES(summary.outstanding)}</strong></div>
       </div>
 
@@ -196,18 +197,19 @@ function LoanDetails({ loanId, onChanged }) {
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>#</th><th>Due Date</th><th>Repayment</th><th>Balance</th><th>Paid</th></tr></thead>
+          <thead><tr><th>#</th><th>Due Date</th><th>Repayment</th><th>Penalty</th><th>Balance</th><th>Paid</th></tr></thead>
           <tbody>
             {schedule.slice(0, 12).map((row) => (
               <tr key={row.id || `${loan.id}-${row.installment}`}>
                 <td>{row.installment}</td>
                 <td>{formatDate(row.due_date)}</td>
                 <td>{formatKES(row.repayment)}</td>
+                <td>{formatKES(row.penalty)}</td>
                 <td>{formatKES(row.balance)}</td>
                 <td>{row.paid ? "Yes" : "No"}</td>
               </tr>
             ))}
-            {schedule.length === 0 ? <tr><td colSpan={5} className="table-empty">No repayment schedule available yet.</td></tr> : null}
+            {schedule.length === 0 ? <tr><td colSpan={6} className="table-empty">No repayment schedule available yet.</td></tr> : null}
           </tbody>
         </table>
       </div>
@@ -265,6 +267,7 @@ function LoanList({ refreshToken }) {
     { key: "status", label: "Status", render: (row) => <span className={statusClass(row.status)}>{row.status}</span> },
     { key: "amount", label: "Principal", render: (row) => formatKES(row.amount) },
     { key: "total_paid", label: "Repaid", render: (row) => formatKES(row.total_paid) },
+    { key: "penalties", label: "Penalties", render: (row) => formatKES(row.penalties) },
     { key: "outstanding", label: "Outstanding", render: (row) => formatKES(row.outstanding) },
     {
       key: "actions",

@@ -87,19 +87,23 @@ def calculate_penalty(schedule_row: dict, penalty_rate_pct: float = 5.0) -> floa
 
 def loan_summary(loan: dict, schedule: list[dict]) -> dict:
     """Compute derived loan metrics."""
-    total_repayable = sum(r["repayment"] for r in schedule)
-    total_interest  = sum(r["interest"]  for r in schedule)
-    paid_rows       = [r for r in schedule if r.get("paid")]
-    pending_rows    = [r for r in schedule if not r.get("paid")]
-    next_due        = pending_rows[0] if pending_rows else None
+    base_repayable = sum(float(r.get("repayment") or 0) for r in schedule)
+    total_interest = sum(float(r.get("interest") or 0) for r in schedule)
+    penalties = float(loan.get("penalties") or 0)
+    total_repayable = base_repayable + penalties
+    total_paid = float(loan.get("total_paid") or 0)
+    paid_rows = [r for r in schedule if r.get("paid")]
+    pending_rows = [r for r in schedule if not r.get("paid")]
+    next_due = pending_rows[0] if pending_rows else None
 
     return {
-        "total_repayable":  round(total_repayable, 2),
-        "total_interest":   round(total_interest, 2),
-        "total_paid":       loan.get("total_paid", 0),
-        "outstanding":      round(max(0, total_repayable - loan.get("total_paid", 0)), 2),
-        "installments_paid":len(paid_rows),
-        "installments_left":len(pending_rows),
-        "next_due":         next_due,
-        "penalties":        loan.get("penalties", 0),
+        "base_repayable": round(base_repayable, 2),
+        "total_repayable": round(total_repayable, 2),
+        "total_interest": round(total_interest, 2),
+        "total_paid": round(total_paid, 2),
+        "outstanding": round(max(0, total_repayable - total_paid), 2),
+        "installments_paid": len(paid_rows),
+        "installments_left": len(pending_rows),
+        "next_due": next_due,
+        "penalties": round(penalties, 2),
     }

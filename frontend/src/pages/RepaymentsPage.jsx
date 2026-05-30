@@ -166,6 +166,7 @@ function RepaymentsPage() {
                 <th>Loan</th>
                 <th>Borrower</th>
                 <th>Status</th>
+                <th>Penalties</th>
                 <th>Outstanding</th>
               </tr>
             </thead>
@@ -175,12 +176,13 @@ function RepaymentsPage() {
                   <td>{loan.id}</td>
                   <td>{loan.member_name || loan.member_id}</td>
                   <td><span className={statusClass(loan.status)}>{loan.status}</span></td>
+                  <td>{formatKES(loan.penalties)}</td>
                   <td>{formatKES(loan.outstanding)}</td>
                 </tr>
               ))}
               {loans.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="table-empty">No active or overdue loans available.</td>
+                  <td colSpan={5} className="table-empty">No active or overdue loans available.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -200,7 +202,7 @@ function RepaymentsPage() {
               <option value="">Select loan</option>
               {loans.map((loan) => (
                 <option key={loan.id} value={loan.id}>
-                  {loan.id} - {loan.member_name || loan.member_id} ({formatKES(loan.outstanding)} outstanding)
+                  {loan.id} - {loan.member_name || loan.member_id} ({formatKES(loan.outstanding)} outstanding, {formatKES(loan.penalties)} penalties)
                 </option>
               ))}
             </select>

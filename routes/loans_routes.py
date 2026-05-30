@@ -154,7 +154,7 @@ def get_loans():
             COALESCE(risk.overdue_installments,0) as overdue_installments,
             risk.oldest_due_date,
             COALESCE(CAST(julianday(date('now')) - julianday(risk.oldest_due_date) AS INTEGER),0) as days_in_arrears,
-            MAX(COALESCE(risk.total_repayable, l.amount) - l.total_paid, 0) as outstanding
+            MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) as outstanding
             FROM loans l
             JOIN members m ON l.member_id=m.id
             LEFT JOIN users u ON l.officer_id=u.id
@@ -163,7 +163,7 @@ def get_loans():
                        SUM(repayment) as total_repayable,
                        MIN(CASE WHEN paid=0 THEN due_date END) as next_due_date,
                        MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END) as oldest_due_date,
-                       SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment ELSE 0 END) as amount_in_arrears,
+                       SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment + COALESCE(penalty,0) ELSE 0 END) as amount_in_arrears,
                        COUNT(CASE WHEN paid=0 AND due_date < date('now') THEN 1 END) as overdue_installments
                 FROM loan_schedule
                 GROUP BY loan_id
@@ -233,9 +233,9 @@ def loan_statement(loan_id):
     settings = data["settings"]
     summary = data["summary"]
     schedule_rows = "".join(
-        f"<tr><td>{r['installment']}</td><td>{escape(str(r['due_date']))}</td><td>{r['principal']:,.2f}</td><td>{r['interest']:,.2f}</td><td>{r['repayment']:,.2f}</td><td>{r['balance']:,.2f}</td></tr>"
+        f"<tr><td>{r['installment']}</td><td>{escape(str(r['due_date']))}</td><td>{r['principal']:,.2f}</td><td>{r['interest']:,.2f}</td><td>{r['repayment']:,.2f}</td><td>{float(r.get('penalty') or 0):,.2f}</td><td>{r['balance']:,.2f}</td></tr>"
         for r in schedule
-    ) or "<tr><td colspan='6'>Schedule will be available after approval.</td></tr>"
+    ) or "<tr><td colspan='7'>Schedule will be available after approval.</td></tr>"
     repay_rows = "".join(
         f"<tr><td>{escape(str(r['payment_date']))}</td><td>{escape(str(r.get('reference') or r['id']))}</td><td>{escape(str(r['method']))}</td><td>{r['amount']:,.2f}</td></tr>"
         for r in repays
@@ -264,11 +264,11 @@ def loan_statement(loan_id):
     <div class='right'><strong>A5 Loan Statement</strong><div>{date.today().isoformat()}</div><div>{escape(loan_id)}</div></div></div>
     <div class='grid'>
     <div class='box'><strong>{'External Borrower' if loan.get('member_type') == 'borrower' else 'Member'}</strong><br>{escape(loan['member_name'])}<br>{escape(loan.get('member_phone') or '')}<br>{escape(loan.get('member_address') or '')}</div>
-    <div class='box'><strong>Loan Summary</strong><br>Principal: KES {loan['amount']:,.2f}<br>Rate: {loan['annual_rate']}% p.a.<br>Term: {loan['term_months']} months<br>Status: {escape(loan['status'])}</div>
+    <div class='box'><strong>Loan Summary</strong><br>Principal: KES {loan['amount']:,.2f}<br>Rate: {loan['annual_rate']}% p.a.<br>Term: {loan['term_months']} months<br>Penalties: KES {summary['penalties']:,.2f}<br>Status: {escape(loan['status'])}</div>
     <div class='box'>Total Repayable<br><strong>KES {summary['total_repayable']:,.2f}</strong></div>
     <div class='box'>Outstanding<br><strong>KES {summary['outstanding']:,.2f}</strong></div>
     </div>
-    <h2>Repayment Schedule</h2><table><thead><tr><th>#</th><th>Due</th><th>Principal</th><th>Interest</th><th>Payment</th><th>Balance</th></tr></thead><tbody>{schedule_rows}</tbody></table>
+    <h2>Repayment Schedule</h2><table><thead><tr><th>#</th><th>Due</th><th>Principal</th><th>Interest</th><th>Payment</th><th>Penalty</th><th>Balance</th></tr></thead><tbody>{schedule_rows}</tbody></table>
     <h2>Repayments</h2><table><thead><tr><th>Date</th><th>Reference</th><th>Method</th><th>Amount</th></tr></thead><tbody>{repay_rows}</tbody></table>
     <script>setTimeout(()=>window.print(),300)</script></body></html>"""
     return make_response(html)
@@ -338,8 +338,8 @@ def create_loan():
             start_date = borrowed_date
             rebuild_loan_schedule(db, loan, start_date)
             total_repayable = db.execute(
-                "SELECT COALESCE(SUM(repayment),0) FROM loan_schedule WHERE loan_id=?",
-                (loan["id"],)
+                "SELECT COALESCE(SUM(repayment),0) + COALESCE((SELECT penalties FROM loans WHERE id=?),0) FROM loan_schedule WHERE loan_id=?",
+                (loan["id"], loan["id"])
             ).fetchone()[0]
             if float(loan.get("total_paid") or 0) >= float(total_repayable):
                 new_status = "completed"
@@ -633,8 +633,10 @@ def restructure_loan(loan_id):
     if not schedule:
         db.close(); return error("Loan has no schedule to restructure")
     summary = loan_summary(loan, schedule)
-    outstanding = float(summary.get("outstanding") or 0)
+    outstanding = max(0, float(summary.get("base_repayable") or 0) - float(loan.get("total_paid") or 0))
     if outstanding <= 0:
+        if float(summary.get("penalties") or 0) > 0:
+            db.close(); return error("Only penalty balance remains. Record a penalty payment instead of restructuring.")
         db.close(); return error("Loan is already fully paid")
     try:
         term_months = int(d.get("term_months") or loan.get("term_months") or 1)
@@ -679,6 +681,8 @@ def restructure_loan(loan_id):
 @login_required
 def get_loan_schedule(loan_id):
     db       = get_db()
+    refresh_loan_statuses(db)
+    db.commit()
     schedule = rows_to_list(db.execute(
         "SELECT * FROM loan_schedule WHERE loan_id=? ORDER BY installment", (loan_id,)
     ).fetchall())

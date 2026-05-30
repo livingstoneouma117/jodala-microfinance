@@ -189,6 +189,13 @@ tbody tr:hover{background:var(--surface2)}
 :root[data-theme="dark"] .login-panel{background:#13203a;border-color:var(--border)}
 .td-actions{display:flex;gap:4px;align-items:center}
 tfoot td{border-top:2px solid var(--border2);background:var(--surface2);font-weight:700}
+.compact-loans-table th,.compact-loans-table td,.compact-report-table th,.compact-report-table td{padding:9px 10px}
+.compact-loans-table .loan-main,.compact-loans-table .loan-money,.compact-loans-table .loan-dates,.compact-loans-table .loan-terms,.report-money-stack{display:flex;flex-direction:column;gap:4px}
+.compact-loans-table .loan-main .text-xs,.compact-loans-table .loan-money .text-xs,.compact-loans-table .loan-dates .text-xs,.compact-loans-table .loan-terms .text-xs{line-height:1.25}
+.report-money-stack{min-width:140px}
+.report-line{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;line-height:1.25}
+.report-line span{color:var(--muted)}
+.report-line.total{padding-top:4px;border-top:1px dashed var(--border);font-weight:800}
 
 /* ─── Badges ─────────────────────────────────────────────────────────── */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700}
@@ -628,11 +635,10 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
           </div>
         </div>
         <div class="table-wrap">
-          <table class="loans-table">
+          <table class="loans-table compact-loans-table">
             <thead><tr>
-              <th>Loan ID</th><th>Member</th><th>Principal</th>
-              <th>Balance (To Pay)</th><th>Rate / Term</th><th>Loan Date</th><th>Due Date</th><th>Method</th><th>Status</th>
-              <th>Repaid Amount</th><th>Actions</th>
+              <th>Borrower / Loan</th><th>Principal / Balance</th><th>Repaid</th>
+              <th>Dates</th><th>Terms</th><th>Status</th><th>Actions</th>
             </tr></thead>
             <tbody id="loans-tbody"></tbody>
           </table>
@@ -760,8 +766,8 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <div class="card mb5">
           <div class="font-bold mb3">Monthly Account Report</div>
           <div class="table-wrap">
-            <table>
-              <thead><tr><th>Month</th><th>Opening</th><th>Savings Collected</th><th>Loan Repaid</th><th>Inflow</th><th>Loans Disbursed</th><th>Expenses</th><th>Outflow</th><th>Net</th><th>Closing</th></tr></thead>
+            <table class="compact-report-table account-monthly-table">
+              <thead><tr><th>Month</th><th>Opening</th><th>Collections</th><th>Outflows</th><th>Net</th><th>Closing</th></tr></thead>
               <tbody id="report-account-monthly-tbody"></tbody>
               <tfoot><tr id="report-account-monthly-totals"></tr></tfoot>
             </table>
@@ -1740,23 +1746,39 @@ async function loadLoans(){
 
     document.getElementById('loans-tbody').innerHTML=loans.map(l=>`
       <tr>
-        <td data-label="Loan ID"><span class="text-accent font-bold" style="font-family:monospace">${l.id}</span></td>
-        <td data-label="Member"><div class="font-bold">${l.member_name}</div><div class="text-xs text-muted">${l.member_phone||''}</div></td>
-        <td data-label="Principal" class="font-bold">KES ${fmt(l.amount,0)}</td>
-        <td data-label="Balance (To Pay)">
-          <div class="font-bold text-amber">KES ${fmt(Math.max(0,l.outstanding||0),0)}</div>
-          <div class="text-xs text-muted">${Math.max(0,Number(l.outstanding||0))<=0.01?'Cleared':'Remaining to pay'}</div>
+        <td data-label="Borrower / Loan">
+          <div class="loan-main">
+            <div class="font-bold">${l.member_name}</div>
+            <div class="text-xs text-accent font-bold" style="font-family:monospace">${l.id}</div>
+            <div class="text-xs text-muted">${l.member_phone||''}</div>
+          </div>
         </td>
-        <td data-label="Rate / Term" class="text-muted">${l.annual_rate}% / ${l.term_months}mo</td>
-        <td data-label="Loan Date" class="text-muted">${fmtSafeD(l.borrowed_date)}</td>
-        <td data-label="Due Date" class="text-muted">${l.next_due_date?fmtSafeD(l.next_due_date):'—'}</td>
-        <td data-label="Method"><span class="badge badge-inactive" style="font-size:10px">${l.method==='flat'?'Flat':'Reducing'}</span></td>
+        <td data-label="Principal / Balance">
+          <div class="loan-money">
+            <div><span class="text-xs text-muted">Principal</span><div class="font-bold">KES ${fmt(l.amount,0)}</div></div>
+            <div><span class="text-xs text-muted">Balance</span><div class="font-bold text-amber">KES ${fmt(Math.max(0,l.outstanding||0),0)}</div></div>
+            <div class="text-xs text-muted">${Math.max(0,Number(l.outstanding||0))<=0.01?'Cleared':'Remaining to pay'}</div>
+          </div>
+        </td>
+        <td data-label="Repaid">
+          <div class="loan-money">
+            <div class="text-green font-bold">KES ${fmt(l.total_paid,0)}</div>
+            ${l.penalties>0?`<div class="text-xs text-red">Penalty: KES ${fmt(l.penalties,0)}</div>`:'<div class="text-xs text-muted">No penalty</div>'}
+          </div>
+        </td>
+        <td data-label="Dates">
+          <div class="loan-dates">
+            <div><span class="text-xs text-muted">Loan</span><div>${fmtSafeD(l.borrowed_date)}</div></div>
+            <div><span class="text-xs text-muted">Due</span><div>${l.next_due_date?fmtSafeD(l.next_due_date):'—'}</div></div>
+          </div>
+        </td>
+        <td data-label="Terms">
+          <div class="loan-terms">
+            <div class="text-muted">${l.annual_rate}% / ${l.term_months}mo</div>
+            <span class="badge badge-inactive" style="font-size:10px">${l.method==='flat'?'Flat':'Reducing'}</span>
+          </div>
+        </td>
         <td data-label="Status">${badge(l.status)}</td>
-        <td data-label="Repaid Amount">
-          <div class="text-green font-bold">KES ${fmt(l.total_paid,0)}</div>
-          <div class="text-xs text-muted">Total repaid so far</div>
-          ${l.penalties>0?`<div class="text-xs text-red">+${fmt(l.penalties,0)} penalty</div>`:''}
-        </td>
         <td data-label="Actions" class="actions-cell">
           <div class="td-actions">
             <button class="btn-icon" title="View Details" onclick="viewLoan('${l.id}')"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
@@ -1773,7 +1795,7 @@ async function loadLoans(){
               <button class="btn-icon" title="Disburse" onclick="disburseLoan('${l.id}')" style="color:var(--accent2)">Disburse</button>`:''}
           </div>
         </td>
-      </tr>`).join('')||'<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">💰</div><div class="empty-msg">No loans found</div></div></td></tr>';
+      </tr>`).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">💰</div><div class="empty-msg">No loans found</div></div></td></tr>';
 
     renderPagination('loans-pagination',pages,loansPage,p=>{loansPage=p;loadLoans()});
   }catch(e){toast(e.message,'error')}
@@ -2512,30 +2534,46 @@ function renderAccountMonthlyReport(data){
 
   tbody.innerHTML=rows.map(r=>`
     <tr>
-      <td class="font-bold">${fmtMonthLabel(r.month)}</td>
-      <td>KES ${fmt(r.opening_balance||0,0)}</td>
-      <td class="text-green">KES ${fmt(r.savings_collections||0,0)}</td>
-      <td class="text-green">KES ${fmt(r.loan_repayments||0,0)}</td>
-      <td class="text-green font-bold">KES ${fmt(r.inflow||0,0)}</td>
-      <td class="text-red">KES ${fmt(r.loan_disbursed||0,0)}</td>
-      <td class="text-red">KES ${fmt(r.expenses||0,0)}</td>
-      <td class="text-red font-bold">KES ${fmt(r.outflow||0,0)}</td>
-      <td class="${Number(r.net||0)>=0?'text-green':'text-red'} font-bold">${Number(r.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(r.net||0)),0)}</td>
-      <td class="font-bold">KES ${fmt(r.closing_balance||0,0)}</td>
+      <td class="font-bold" data-label="Month">${fmtMonthLabel(r.month)}</td>
+      <td data-label="Opening">KES ${fmt(r.opening_balance||0,0)}</td>
+      <td data-label="Collections">
+        <div class="report-money-stack">
+          <div class="report-line"><span>Savings</span><strong class="text-green">KES ${fmt(r.savings_collections||0,0)}</strong></div>
+          <div class="report-line"><span>Repaid</span><strong class="text-green">KES ${fmt(r.loan_repayments||0,0)}</strong></div>
+          <div class="report-line total"><span>Inflow</span><strong class="text-green">KES ${fmt(r.inflow||0,0)}</strong></div>
+        </div>
+      </td>
+      <td data-label="Outflows">
+        <div class="report-money-stack">
+          <div class="report-line"><span>Loans</span><strong class="text-red">KES ${fmt(r.loan_disbursed||0,0)}</strong></div>
+          <div class="report-line"><span>Expenses</span><strong class="text-red">KES ${fmt(r.expenses||0,0)}</strong></div>
+          <div class="report-line total"><span>Outflow</span><strong class="text-red">KES ${fmt(r.outflow||0,0)}</strong></div>
+        </div>
+      </td>
+      <td data-label="Net" class="${Number(r.net||0)>=0?'text-green':'text-red'} font-bold">${Number(r.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(r.net||0)),0)}</td>
+      <td data-label="Closing" class="font-bold">KES ${fmt(r.closing_balance||0,0)}</td>
     </tr>
-  `).join('')||'<tr><td colspan="10"><div class="empty-state"><div class="empty-msg">No monthly account activity yet</div></div></td></tr>';
+  `).join('')||'<tr><td colspan="6"><div class="empty-state"><div class="empty-msg">No monthly account activity yet</div></div></td></tr>';
 
   tfoot.innerHTML=`
-    <td class="font-bold">TOTALS (${rows.length} months)</td>
-    <td class="font-bold">KES ${fmt(opening,0)}</td>
-    <td class="font-bold text-green">KES ${fmt(totals.savings_collections||0,0)}</td>
-    <td class="font-bold text-green">KES ${fmt(totals.loan_repayments||0,0)}</td>
-    <td class="font-bold text-green">KES ${fmt(totals.inflow||0,0)}</td>
-    <td class="font-bold text-red">KES ${fmt(totals.loan_disbursed||0,0)}</td>
-    <td class="font-bold text-red">KES ${fmt(totals.expenses||0,0)}</td>
-    <td class="font-bold text-red">KES ${fmt(totals.outflow||0,0)}</td>
-    <td class="font-bold ${Number(totals.net||0)>=0?'text-green':'text-red'}">${Number(totals.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(totals.net||0)),0)}</td>
-    <td class="font-bold">KES ${fmt(closing,0)}</td>`;
+    <td class="font-bold" data-label="Month">TOTALS (${rows.length} months)</td>
+    <td class="font-bold" data-label="Opening">KES ${fmt(opening,0)}</td>
+    <td data-label="Collections">
+      <div class="report-money-stack">
+        <div class="report-line"><span>Savings</span><strong class="text-green">KES ${fmt(totals.savings_collections||0,0)}</strong></div>
+        <div class="report-line"><span>Repaid</span><strong class="text-green">KES ${fmt(totals.loan_repayments||0,0)}</strong></div>
+        <div class="report-line total"><span>Inflow</span><strong class="text-green">KES ${fmt(totals.inflow||0,0)}</strong></div>
+      </div>
+    </td>
+    <td data-label="Outflows">
+      <div class="report-money-stack">
+        <div class="report-line"><span>Loans</span><strong class="text-red">KES ${fmt(totals.loan_disbursed||0,0)}</strong></div>
+        <div class="report-line"><span>Expenses</span><strong class="text-red">KES ${fmt(totals.expenses||0,0)}</strong></div>
+        <div class="report-line total"><span>Outflow</span><strong class="text-red">KES ${fmt(totals.outflow||0,0)}</strong></div>
+      </div>
+    </td>
+    <td class="font-bold ${Number(totals.net||0)>=0?'text-green':'text-red'}" data-label="Net">${Number(totals.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(totals.net||0)),0)}</td>
+    <td class="font-bold" data-label="Closing">KES ${fmt(closing,0)}</td>`;
 }
 
 function exportReport(type, formatOpt=null){

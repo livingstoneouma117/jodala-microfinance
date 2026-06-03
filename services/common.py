@@ -9,9 +9,10 @@ from datetime import date, datetime
 from html import escape
 from io import BytesIO
 
-from auth import decode_token, gen_id, generate_token, hash_password, login_required, normalize_permissions, roles_required
+from auth import decode_token, gen_id, generate_token, login_required, normalize_permissions, roles_required
 from calculator import build_schedule, calculate_penalty, loan_summary
 from database import get_db, hash_password as db_hash, init_db
+from security import hash_password, verify_password, password_needs_upgrade
 def row_to_dict(row) -> dict:
     return dict(row) if row else {}
 
@@ -75,20 +76,14 @@ def _int_env(name: str, default: int, minimum: int) -> int:
 LOGIN_MAX_ATTEMPTS = _int_env("LOGIN_MAX_ATTEMPTS", 5, 1)
 LOGIN_WINDOW_SECONDS = _int_env("LOGIN_WINDOW_SECONDS", 600, 60)
 LOGIN_BLOCK_SECONDS = _int_env("LOGIN_BLOCK_SECONDS", 900, 60)
-_LOGIN_ATTEMPTS: dict[str, dict] = {}
 
 
-def _cleanup_login_attempts(now_ts: float) -> None:
-    expired = []
-    for key, rec in _LOGIN_ATTEMPTS.items():
-        blocked_until = float(rec.get("blocked_until", 0) or 0)
-        last_seen = float(rec.get("last_seen", 0) or 0)
-        if blocked_until and blocked_until > now_ts:
-            continue
-        if now_ts - last_seen > LOGIN_WINDOW_SECONDS * 2:
-            expired.append(key)
-    for key in expired:
-        _LOGIN_ATTEMPTS.pop(key, None)
+def _cleanup_login_attempts(db, now_ts: float) -> None:
+    stale_cutoff = now_ts - (LOGIN_WINDOW_SECONDS * 2)
+    db.execute(
+        "DELETE FROM login_attempts WHERE blocked_until <= ? AND last_seen < ?",
+        (now_ts, stale_cutoff),
+    )
 
 
 def _login_attempt_key(username: str) -> str:
@@ -99,9 +94,14 @@ def _login_attempt_key(username: str) -> str:
 
 def _login_block_remaining_seconds(attempt_key: str) -> int:
     now_ts = pytime.time()
-    rec = _LOGIN_ATTEMPTS.get(attempt_key)
-    if not rec:
-        return 0
+    db = get_db()
+    _cleanup_login_attempts(db, now_ts)
+    rec = row_to_dict(db.execute(
+        "SELECT blocked_until FROM login_attempts WHERE attempt_key=?",
+        (attempt_key,),
+    ).fetchone())
+    db.commit()
+    db.close()
     blocked_until = float(rec.get("blocked_until", 0) or 0)
     if blocked_until <= now_ts:
         return 0
@@ -110,23 +110,45 @@ def _login_block_remaining_seconds(attempt_key: str) -> int:
 
 def _record_failed_login(attempt_key: str) -> int:
     now_ts = pytime.time()
-    rec = _LOGIN_ATTEMPTS.get(attempt_key, {"attempts": 0, "window_start": now_ts, "blocked_until": 0, "last_seen": now_ts})
+    db = get_db()
+    _cleanup_login_attempts(db, now_ts)
+    rec = row_to_dict(db.execute(
+        "SELECT * FROM login_attempts WHERE attempt_key=?",
+        (attempt_key,),
+    ).fetchone())
     window_start = float(rec.get("window_start", now_ts) or now_ts)
+    attempts = int(rec.get("attempts", 0) or 0)
+    blocked_until = float(rec.get("blocked_until", 0) or 0)
     if now_ts - window_start > LOGIN_WINDOW_SECONDS:
-        rec["attempts"] = 0
-        rec["window_start"] = now_ts
-        rec["blocked_until"] = 0
-    rec["attempts"] = int(rec.get("attempts", 0) or 0) + 1
-    rec["last_seen"] = now_ts
-    if rec["attempts"] >= LOGIN_MAX_ATTEMPTS:
-        rec["blocked_until"] = now_ts + LOGIN_BLOCK_SECONDS
-    _LOGIN_ATTEMPTS[attempt_key] = rec
-    _cleanup_login_attempts(now_ts)
-    return _login_block_remaining_seconds(attempt_key)
+        attempts = 0
+        window_start = now_ts
+        blocked_until = 0
+    attempts += 1
+    if attempts >= LOGIN_MAX_ATTEMPTS:
+        blocked_until = now_ts + LOGIN_BLOCK_SECONDS
+    db.execute(
+        """
+        INSERT INTO login_attempts (attempt_key, attempts, window_start, blocked_until, last_seen, updated_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(attempt_key) DO UPDATE SET
+            attempts=excluded.attempts,
+            window_start=excluded.window_start,
+            blocked_until=excluded.blocked_until,
+            last_seen=excluded.last_seen,
+            updated_at=datetime('now')
+        """,
+        (attempt_key, attempts, window_start, blocked_until, now_ts),
+    )
+    db.commit()
+    db.close()
+    return max(0, int(blocked_until - now_ts))
 
 
 def _clear_login_attempts(attempt_key: str) -> None:
-    _LOGIN_ATTEMPTS.pop(attempt_key, None)
+    db = get_db()
+    db.execute("DELETE FROM login_attempts WHERE attempt_key=?", (attempt_key,))
+    db.commit()
+    db.close()
 
 def get_settings_dict():
     db = get_db()

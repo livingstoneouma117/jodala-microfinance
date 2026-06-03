@@ -1,4 +1,5 @@
 import importlib.util
+import sqlite3
 import sys
 from datetime import date
 from pathlib import Path
@@ -48,6 +49,24 @@ def test_login_success_and_failure(client):
     failed = client.post("/api/auth/login", json={"username": "admin", "password": "wrong-password"})
     assert failed.status_code == 401
     assert failed.get_json()["success"] is False
+
+
+def test_password_hashes_are_bcrypt_and_login_rate_limit_persists(client, tmp_path, monkeypatch):
+    db_path = tmp_path / "sacco-test.db"
+    with sqlite3.connect(db_path) as conn:
+        stored = conn.execute("SELECT password FROM users WHERE username='admin'").fetchone()[0]
+    assert stored.startswith("$2")
+
+    for _ in range(5):
+        response = client.post("/api/auth/login", json={"username": "admin", "password": "wrong-password"})
+        assert response.status_code == 401
+
+    blocked = client.post("/api/auth/login", json={"username": "admin", "password": "wrong-password"})
+    assert blocked.status_code == 429
+
+    reloaded_client = _fresh_app(tmp_path, monkeypatch)
+    still_blocked = reloaded_client.post("/api/auth/login", json={"username": "admin", "password": "wrong-password"})
+    assert still_blocked.status_code == 429
 
 
 def test_report_export_requires_auth_and_returns_csv(client):

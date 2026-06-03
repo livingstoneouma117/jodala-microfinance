@@ -11,6 +11,7 @@ from functools import wraps
 from flask import request, jsonify, g
 
 from database import get_db
+from security import hash_password, verify_password, password_needs_upgrade
 
 
 def _int_env(name: str, default: int) -> int:
@@ -84,10 +85,6 @@ def _load_secret_key() -> str:
 
 
 SECRET_KEY = _load_secret_key()
-
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def normalize_role(role: str) -> str:
@@ -310,4 +307,3 @@ def roles_required(*roles):
             return jsonify({"error": "Insufficient permissions"}), 403
         return decorated
     return decorator
-

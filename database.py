@@ -2,9 +2,10 @@
 SACCOFinance LMS - Database Layer (SQLite)
 """
 import sqlite3
-import hashlib
 import os
 from datetime import datetime
+
+from security import hash_password
 
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "sacco.db")
 DB_PATH = os.environ.get("DB_PATH", DEFAULT_DB_PATH)
@@ -23,10 +24,6 @@ def get_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
-
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def init_db():
@@ -72,6 +69,16 @@ def init_db():
         key        TEXT PRIMARY KEY,
         value      TEXT,
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS login_attempts (
+        attempt_key   TEXT PRIMARY KEY,
+        attempts      INTEGER NOT NULL DEFAULT 0,
+        window_start  REAL NOT NULL DEFAULT 0,
+        blocked_until REAL NOT NULL DEFAULT 0,
+        last_seen     REAL NOT NULL DEFAULT 0,
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
     )""")
 
     _migrate_schema(c)

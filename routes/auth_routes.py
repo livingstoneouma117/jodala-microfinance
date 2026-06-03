@@ -38,13 +38,20 @@ def login():
     user = row_to_dict(db.execute(
         "SELECT * FROM users WHERE (lower(username)=? OR lower(email)=?) AND active=1", (username, username)
     ).fetchone())
-    db.close()
 
-    if not user or user["password"] != hash_password(pwd):
+    if not user or not verify_password(pwd, user["password"]):
+        db.close()
         _record_failed_login(attempt_key)
         return error("Invalid credentials", 401)
 
+    if password_needs_upgrade(user["password"]):
+        upgraded = hash_password(pwd)
+        db.execute("UPDATE users SET password=? WHERE id=?", (upgraded, user["id"]))
+        db.commit()
+        user["password"] = upgraded
+
     _clear_login_attempts(attempt_key)
+    db.close()
     token = generate_token(user)
     return success({
         "token": token,
@@ -80,7 +87,7 @@ def change_password():
 
     db   = get_db()
     user = row_to_dict(db.execute("SELECT * FROM users WHERE id=?", (g.user["sub"],)).fetchone())
-    if user["password"] != hash_password(old_pwd):
+    if not verify_password(old_pwd, user["password"]):
         db.close()
         return error("Current password is incorrect", 401)
     db.execute("UPDATE users SET password=? WHERE id=?", (hash_password(new_pwd), g.user["sub"]))

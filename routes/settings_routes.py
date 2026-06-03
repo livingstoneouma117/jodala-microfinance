@@ -75,7 +75,17 @@ def get_settings():
 @bp.route("/api/settings", methods=["PUT"])
 @roles_required("admin")
 def update_settings():
-    allowed = {"sacco_name", "logo_text", "logo_image", "logo_url", "address", "phone", "account_opening_balance"}
+    allowed = {
+        "sacco_name",
+        "logo_text",
+        "logo_image",
+        "logo_url",
+        "address",
+        "phone",
+        "account_opening_balance",
+        "default_penalty_rate",
+        "penalty_grace_days",
+    }
     d = request.json or {}
     db = get_db()
     for key, value in d.items():

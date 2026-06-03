@@ -12,6 +12,8 @@ function SettingsPage() {
     address: "",
     phone: "",
     account_opening_balance: "0",
+    default_penalty_rate: "5",
+    penalty_grace_days: "0",
   });
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,8 @@ function SettingsPage() {
           address: settings.address || "",
           phone: settings.phone || "",
           account_opening_balance: settings.account_opening_balance || "0",
+          default_penalty_rate: settings.default_penalty_rate || "5",
+          penalty_grace_days: settings.penalty_grace_days || "0",
         });
         setStats(dashboardRes?.data?.stats || null);
       })
@@ -63,6 +67,8 @@ function SettingsPage() {
         address: form.address,
         phone: form.phone,
         account_opening_balance: form.account_opening_balance,
+        default_penalty_rate: form.default_penalty_rate,
+        penalty_grace_days: form.penalty_grace_days,
       };
       const res = await apiFetch("/api/settings", {
         method: "PUT",
@@ -128,6 +134,8 @@ function SettingsPage() {
           <StatCard label="Loan Disbursed" value={formatKES(stats.account_loan_disbursed)} tone="warn" />
           <StatCard label="Expenses" value={formatKES(stats.account_expenses)} tone="danger" />
           <StatCard label="Opening Balance" value={formatKES(form.account_opening_balance)} />
+          <StatCard label="Penalty Rate" value={`${Number(form.default_penalty_rate || 0).toFixed(2)}%`} />
+          <StatCard label="Penalty Grace" value={`${Number(form.penalty_grace_days || 0).toFixed(0)} day(s)`} />
         </div>
       ) : null}
 
@@ -189,6 +197,29 @@ function SettingsPage() {
               onChange={(event) => setForm((prev) => ({ ...prev, account_opening_balance: event.target.value }))}
             />
           </label>
+
+          <div className="two-col">
+            <label>
+              Default Penalty Rate (%)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.default_penalty_rate}
+                onChange={(event) => setForm((prev) => ({ ...prev, default_penalty_rate: event.target.value }))}
+              />
+            </label>
+            <label>
+              Penalty Grace Period (Days)
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={form.penalty_grace_days}
+                onChange={(event) => setForm((prev) => ({ ...prev, penalty_grace_days: event.target.value }))}
+              />
+            </label>
+          </div>
 
           <button type="submit" className="primary-btn" disabled={saving}>
             {saving ? "Saving..." : "Save Settings"}

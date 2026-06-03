@@ -140,9 +140,27 @@ def get_settings_dict():
         "address": "",
         "phone": "",
         "account_opening_balance": "0",
+        "default_penalty_rate": "5",
+        "penalty_grace_days": "0",
     }
     settings.update({r["key"]: r["value"] for r in rows})
     return settings
+
+
+def get_setting_float(db, key: str, default: float = 0.0) -> float:
+    row = db.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+    try:
+        return float((row["value"] if row else default) or default)
+    except (TypeError, ValueError):
+        return float(default or 0)
+
+
+def get_setting_int(db, key: str, default: int = 0) -> int:
+    row = db.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+    try:
+        return int(float((row["value"] if row else default) or default))
+    except (TypeError, ValueError):
+        return int(default or 0)
 
 def get_account_opening_balance(db) -> float:
     opening_balance_row = db.execute(
@@ -1128,7 +1146,10 @@ def schedule_penalty_amount(schedule_row: dict, penalty_rate_pct: float, as_of: 
         end_date = as_of or date.today()
     if end_date <= due_date:
         return 0.0
-    days_overdue = (end_date - due_date).days
+    grace_days = int(schedule_row.get("grace_days") or 0)
+    days_overdue = max(0, (end_date - due_date).days - grace_days)
+    if days_overdue <= 0:
+        return 0.0
     months_overdue = max(1, days_overdue // 30)
     return round(float(schedule_row.get("repayment") or 0) * rate / 100 * months_overdue, 2)
 
@@ -1141,12 +1162,14 @@ def recalculate_loan_penalties(db, loan_id: str | None = None) -> None:
         params.append(loan_id)
     else:
         where = "WHERE COALESCE(l.status,'') <> 'written_off'"
+    grace_days = get_setting_int(db, "penalty_grace_days", 0)
+    default_penalty_rate = get_setting_float(db, "default_penalty_rate", 5)
     loans = rows_to_list(db.execute(
-        f"""SELECT l.id, COALESCE(lp.penalty_rate, 5) AS penalty_rate
+        f"""SELECT l.id, COALESCE(NULLIF(lp.penalty_rate, 0), ?, 0) AS penalty_rate
             FROM loans l
             LEFT JOIN loan_products lp ON lp.id=l.product_id
             {where}""",
-        params,
+        [default_penalty_rate] + params,
     ).fetchall())
     for loan in loans:
         rate = float(loan.get("penalty_rate") or 0)
@@ -1156,7 +1179,7 @@ def recalculate_loan_penalties(db, loan_id: str | None = None) -> None:
         ).fetchall())
         total_penalty = 0.0
         for row in rows:
-            penalty = schedule_penalty_amount(row, rate)
+            penalty = schedule_penalty_amount({**row, "grace_days": grace_days}, rate)
             total_penalty += penalty
             db.execute("UPDATE loan_schedule SET penalty=? WHERE id=?", (penalty, row["id"]))
         db.execute("UPDATE loans SET penalties=? WHERE id=?", (round(total_penalty, 2), loan["id"]))

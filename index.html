@@ -892,6 +892,16 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
                 <button class="btn btn-ghost" type="button" onclick="addMainAccountFunds()">Add</button>
               </div>
             </div>
+            <div class="form-group">
+              <label class="form-label">Default Penalty Rate (%)</label>
+              <input id="set-default-penalty-rate" class="form-input" type="number" min="0" step="0.01" placeholder="5"/>
+              <div class="form-hint">Used when a loan product does not have its own penalty rate.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Penalty Grace Period (Days)</label>
+              <input id="set-penalty-grace-days" class="form-input" type="number" min="0" step="1" placeholder="0"/>
+              <div class="form-hint">No penalty is charged until a schedule is overdue beyond this number of days.</div>
+            </div>
           </div>
           <div class="form-group mt3"><label class="form-label">Address</label><input id="set-address" class="form-input" placeholder="Physical address"/></div>
           <div class="modal-footer" style="padding-left:0;padding-right:0;margin-top:16px">
@@ -2984,6 +2994,10 @@ async function loadSettings(){
       document.getElementById('set-address').value=appSettings.address||'';
       document.getElementById('set-phone').value=appSettings.phone||'';
       document.getElementById('set-opening-balance').value=appSettings.account_opening_balance||'0';
+      const penaltyRateInput=document.getElementById('set-default-penalty-rate');
+      if(penaltyRateInput) penaltyRateInput.value=appSettings.default_penalty_rate||'5';
+      const graceDaysInput=document.getElementById('set-penalty-grace-days');
+      if(graceDaysInput) graceDaysInput.value=appSettings.penalty_grace_days||'0';
       pendingLogoImage=appSettings.logo_image||'';
       renderLogoPreview();
     }
@@ -3049,7 +3063,9 @@ async function saveSettings(){
     logo_url:'',
     address:document.getElementById('set-address').value,
     phone:document.getElementById('set-phone').value,
-    account_opening_balance:document.getElementById('set-opening-balance').value||'0'
+    account_opening_balance:document.getElementById('set-opening-balance').value||'0',
+    default_penalty_rate:document.getElementById('set-default-penalty-rate')?.value||'5',
+    penalty_grace_days:document.getElementById('set-penalty-grace-days')?.value||'0'
   };
   try{
     const res=await api('/settings',{method:'PUT',body:JSON.stringify(data)});

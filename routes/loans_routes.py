@@ -6,6 +6,7 @@ loans_bp = Blueprint("loans", __name__)
 bp = loans_bp
 
 def _loan_product_payload(d, existing=None):
+    settings = get_settings_dict()
     name = (d.get("name") or (existing or {}).get("name") or "").strip()
     method = (d.get("method") or (existing or {}).get("method") or "reducing").strip().lower()
     if method not in {"reducing", "flat"}:
@@ -17,7 +18,8 @@ def _loan_product_payload(d, existing=None):
     min_term = int(d.get("min_term", (existing or {}).get("min_term", 1)) or 1)
     max_term = int(d.get("max_term", (existing or {}).get("max_term", 1)) or 1)
     annual_rate = float(d.get("annual_rate", (existing or {}).get("annual_rate", 0)) or 0)
-    penalty_rate = float(d.get("penalty_rate", (existing or {}).get("penalty_rate", 0)) or 0)
+    penalty_default = float(settings.get("default_penalty_rate") or 5)
+    penalty_rate = float(d.get("penalty_rate", (existing or {}).get("penalty_rate", penalty_default)) or penalty_default)
     active = 1 if bool(d.get("active", (existing or {}).get("active", 1))) else 0
     if min_amount < 0 or max_amount <= 0 or max_amount < min_amount:
         raise ValueError("Amounts must be valid and max amount must be at least min amount")

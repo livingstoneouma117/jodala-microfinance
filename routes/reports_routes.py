@@ -14,8 +14,8 @@ def report_portfolio():
     rows = rows_to_list(db.execute(
         """SELECT l.*, m.name as member_name,
            COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) as total_repayable,
-           MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) as outstanding,
-           COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
+           CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) END as outstanding,
+           CASE WHEN l.status='written_off' THEN 0 ELSE COALESCE(risk.amount_in_arrears,0) END as amount_in_arrears,
            COALESCE(risk.overdue_installments,0) as overdue_installments,
            COALESCE(CAST(julianday(date('now')) - julianday(risk.oldest_due_date) AS INTEGER),0) as days_in_arrears,
            risk.next_due_date
@@ -37,14 +37,14 @@ def report_portfolio():
         """SELECT
            COALESCE(SUM(amount),0) as total_disbursed,
            COALESCE(SUM(total_paid),0) as total_repaid,
-           COALESCE(SUM(total_repayable),0) as total_repayable,
-           COALESCE(SUM(MAX(total_repayable - total_paid, 0)),0) as total_outstanding,
-           COALESCE(SUM(amount_in_arrears),0) as amount_in_arrears,
-           COALESCE(SUM(CASE WHEN days_in_arrears >= 30 THEN MAX(total_repayable - total_paid, 0) ELSE 0 END),0) as par30_amount,
+           COALESCE(SUM(CASE WHEN status='written_off' THEN 0 ELSE total_repayable END),0) as total_repayable,
+           COALESCE(SUM(CASE WHEN status='written_off' THEN 0 ELSE MAX(total_repayable - total_paid, 0) END),0) as total_outstanding,
+           COALESCE(SUM(CASE WHEN status='written_off' THEN 0 ELSE amount_in_arrears END),0) as amount_in_arrears,
+           COALESCE(SUM(CASE WHEN status='written_off' THEN 0 WHEN days_in_arrears >= 30 THEN MAX(total_repayable - total_paid, 0) ELSE 0 END),0) as par30_amount,
            COALESCE(SUM(penalties),0) as total_penalties,
            COUNT(*) as total_loans
            FROM (
-               SELECT l.id, l.amount, l.total_paid, l.penalties, l.disbursed_date,
+               SELECT l.id, l.amount, l.total_paid, l.penalties, l.disbursed_date, l.status,
                        COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) as total_repayable,
                        COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
                        risk.days_in_arrears
@@ -214,7 +214,7 @@ def export_report(report_type):
         headers = ["ID","Member","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"]
         rows = rows_to_list(db.execute(
             """SELECT l.id,m.name,l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
-                      (COALESCE(SUM(s.repayment), l.amount)+COALESCE(l.penalties,0)-l.total_paid) as outstanding,l.penalties
+                      CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(SUM(s.repayment), l.amount)+COALESCE(l.penalties,0)-l.total_paid, 0) END as outstanding,l.penalties
                FROM loans l
                JOIN members m ON l.member_id=m.id
                LEFT JOIN loan_schedule s ON s.loan_id=l.id

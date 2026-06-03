@@ -811,6 +811,8 @@ def build_statement_pdf(loan_id, data) -> bytes:
         status = str(value or "").lower()
         if status in {"completed", "closed", "cleared"}:
             return (220, 252, 231), green
+        if status in {"written_off", "written off"}:
+            return (226, 232, 240), slate
         if status in {"active", "disbursed"}:
             return (204, 251, 241), teal
         if status in {"overdue", "defaulted", "rejected"}:
@@ -1135,8 +1137,10 @@ def recalculate_loan_penalties(db, loan_id: str | None = None) -> None:
     params = []
     where = ""
     if loan_id:
-        where = "WHERE l.id=?"
+        where = "WHERE l.id=? AND COALESCE(l.status,'') <> 'written_off'"
         params.append(loan_id)
+    else:
+        where = "WHERE COALESCE(l.status,'') <> 'written_off'"
     loans = rows_to_list(db.execute(
         f"""SELECT l.id, COALESCE(lp.penalty_rate, 5) AS penalty_rate
             FROM loans l

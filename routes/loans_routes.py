@@ -149,12 +149,12 @@ def get_loans():
         f"""SELECT l.*, m.name as member_name, m.phone as member_phone,
             u.name as officer_name,
             COALESCE(l.disbursed_date, l.approved_date, l.applied_date) as borrowed_date,
-            risk.next_due_date,
-            COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
-            COALESCE(risk.overdue_installments,0) as overdue_installments,
-            risk.oldest_due_date,
-            COALESCE(CAST(julianday(date('now')) - julianday(risk.oldest_due_date) AS INTEGER),0) as days_in_arrears,
-            MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) as outstanding
+            CASE WHEN l.status='written_off' THEN NULL ELSE risk.next_due_date END as next_due_date,
+            CASE WHEN l.status='written_off' THEN 0 ELSE COALESCE(risk.amount_in_arrears,0) END as amount_in_arrears,
+            CASE WHEN l.status='written_off' THEN 0 ELSE COALESCE(risk.overdue_installments,0) END as overdue_installments,
+            CASE WHEN l.status='written_off' THEN NULL ELSE risk.oldest_due_date END as oldest_due_date,
+            CASE WHEN l.status='written_off' THEN 0 ELSE COALESCE(CAST(julianday(date('now')) - julianday(risk.oldest_due_date) AS INTEGER),0) END as days_in_arrears,
+            CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) END as outstanding
             FROM loans l
             JOIN members m ON l.member_id=m.id
             LEFT JOIN users u ON l.officer_id=u.id
@@ -544,6 +544,57 @@ def reject_loan(loan_id):
     db.commit(); db.close()
     audit(f"Rejected loan {loan_id}", "Loans", d.get("reason",""))
     return success(msg="Loan rejected")
+
+
+@bp.route("/api/loans/<loan_id>/write-off", methods=["POST"])
+@login_required
+@roles_required("admin", "accountant")
+def write_off_loan(loan_id):
+    d = request.json or {}
+    reason = (d.get("reason") or "").strip()
+    if not reason:
+        return error("Write-off reason is required")
+    write_off_date = clean_date(d.get("write_off_date"), date.today().isoformat())
+
+    db = get_db()
+    refresh_loan_statuses(db)
+    loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
+    if not loan:
+        db.close(); return error("Loan not found", 404)
+
+    status = (loan.get("status") or "").lower()
+    if status == "written_off":
+        db.close(); return success(loan, "Loan already written off")
+    if status not in {"active", "overdue"}:
+        db.close(); return error("Only active or overdue loans with an outstanding balance can be written off")
+
+    schedule = rows_to_list(db.execute("SELECT * FROM loan_schedule WHERE loan_id=? ORDER BY installment", (loan_id,)).fetchall())
+    summary = loan_summary(loan, schedule)
+    outstanding = float(summary.get("outstanding") or 0)
+    if outstanding <= 0.01:
+        db.close(); return error("Loan has no outstanding balance to write off")
+
+    existing_notes = (loan.get("notes") or "").strip()
+    writeoff_note = f"[{write_off_date}] Written off KES {outstanding:,.2f}: {reason}"
+    notes = f"{existing_notes}\\n{writeoff_note}" if existing_notes else writeoff_note
+
+    db.execute(
+        """UPDATE loans
+           SET status='written_off', penalties=0, written_off_amount=?, written_off_date=?,
+               written_off_reason=?, written_off_by=?, notes=?
+           WHERE id=?""",
+        (round(outstanding, 2), write_off_date, reason, g.user["sub"], notes, loan_id),
+    )
+    db.execute("UPDATE loan_schedule SET penalty=0 WHERE loan_id=? AND paid=0", (loan_id,))
+    db.execute(
+        "INSERT INTO notifications (user_id,type,message) VALUES (?,?,?)",
+        (loan.get("officer_id") or g.user["sub"], "write_off", f"Loan {loan_id} written off - KES {outstanding:,.0f}"),
+    )
+    db.commit()
+    updated = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
+    db.close()
+    audit(f"Wrote off loan {loan_id}", "Loans", f"KES {outstanding:,.2f}; {reason}")
+    return success({"loan": updated, "written_off_amount": round(outstanding, 2)}, "Loan written off")
 
 
 

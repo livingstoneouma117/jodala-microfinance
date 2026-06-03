@@ -94,16 +94,20 @@ def loan_summary(loan: dict, schedule: list[dict]) -> dict:
     total_paid = float(loan.get("total_paid") or 0)
     paid_rows = [r for r in schedule if r.get("paid")]
     pending_rows = [r for r in schedule if not r.get("paid")]
-    next_due = pending_rows[0] if pending_rows else None
+    status = str(loan.get("status") or "").lower()
+    is_written_off = status in {"written_off", "written off"}
+    next_due = None if is_written_off else (pending_rows[0] if pending_rows else None)
+    outstanding = 0.0 if is_written_off else max(0, total_repayable - total_paid)
 
     return {
         "base_repayable": round(base_repayable, 2),
         "total_repayable": round(total_repayable, 2),
         "total_interest": round(total_interest, 2),
         "total_paid": round(total_paid, 2),
-        "outstanding": round(max(0, total_repayable - total_paid), 2),
+        "outstanding": round(outstanding, 2),
         "installments_paid": len(paid_rows),
-        "installments_left": len(pending_rows),
+        "installments_left": 0 if is_written_off else len(pending_rows),
         "next_due": next_due,
         "penalties": round(penalties, 2),
+        "written_off_amount": round(float(loan.get("written_off_amount") or 0), 2),
     }

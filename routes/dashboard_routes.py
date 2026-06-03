@@ -57,9 +57,10 @@ def dashboard():
         )
     """).fetchone()
     due_today = db.execute("""
-        SELECT COALESCE(SUM(repayment),0)
-        FROM loan_schedule
-        WHERE paid=0 AND due_date=date('now')
+        SELECT COALESCE(SUM(s.repayment),0)
+        FROM loan_schedule s
+        JOIN loans l ON l.id=s.loan_id
+        WHERE s.paid=0 AND s.due_date=date('now') AND l.status <> 'written_off'
     """).fetchone()[0]
 
     # Monthly repayments (last 6 months)

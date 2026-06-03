@@ -189,6 +189,7 @@ nav {
 .btn,
 .ghost-btn,
 .primary-btn,
+.danger-btn,
 .icon-btn,
 .page-btn {
   border: 0;
@@ -203,11 +204,18 @@ nav {
   color: #fff;
 }
 
-.primary-btn:hover {
+.danger-btn {
+  background: var(--danger);
+  color: #fff;
+}
+
+.primary-btn:hover,
+.danger-btn:hover {
   filter: brightness(0.96);
 }
 
 .primary-btn:disabled,
+.danger-btn:disabled,
 .ghost-btn:disabled,
 .page-btn:disabled,
 .icon-btn:disabled {
@@ -416,6 +424,11 @@ td {
 .status-approved {
   background: rgba(180, 83, 9, 0.12);
   color: var(--warn);
+}
+
+.status-written-off {
+  background: rgba(71, 85, 105, 0.12);
+  color: var(--muted);
 }
 
 .modal-overlay {

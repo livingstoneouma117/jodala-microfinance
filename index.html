@@ -107,11 +107,20 @@ nav{flex:1;padding:10px 10px}
 
 /* ─── Topbar ─────────────────────────────────────────────────────────── */
 .page-title{font-family:var(--font-head);font-weight:700;font-size:16px;color:var(--text)}
+.topbar-left{display:flex;align-items:center;gap:12px;min-width:0}
 .topbar-actions{display:flex;align-items:center;gap:8px}
 .topbar-btn{background:none;border:none;color:var(--muted);padding:7px;border-radius:var(--radius);transition:var(--transition);position:relative;display:flex}
 .topbar-btn:hover{background:var(--surface2);color:var(--text)}
 .notif-dot{position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:var(--red);border:2px solid var(--surface)}
 .hamburger{display:none}
+.global-search{position:relative;flex:1;max-width:430px;min-width:240px}
+.global-search .form-input{height:36px;padding-left:34px;padding-right:12px;background:var(--surface2);border-color:var(--border)}
+.global-search .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;z-index:1}
+.global-search-results{display:none;position:absolute;top:42px;left:0;right:0;background:var(--surface);border:1px solid var(--border2);border-radius:12px;box-shadow:var(--shadow);z-index:80;overflow:hidden;max-height:330px;overflow-y:auto}
+.global-search-results.open{display:block}
+.global-search-result{width:100%;border:0;background:transparent;color:var(--text);padding:10px 12px;text-align:left;display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);font-size:12px}
+.global-search-result:last-child{border-bottom:0}.global-search-result:hover{background:var(--surface2)}
+.global-search-result strong{display:block;font-size:13px}.global-search-empty{padding:12px;color:var(--muted);font-size:12px}
 
 /* ─── Cards / Surfaces ───────────────────────────────────────────────── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px}
@@ -189,13 +198,8 @@ tbody tr:hover{background:var(--surface2)}
 :root[data-theme="dark"] .login-panel{background:#13203a;border-color:var(--border)}
 .td-actions{display:flex;gap:4px;align-items:center}
 tfoot td{border-top:2px solid var(--border2);background:var(--surface2);font-weight:700}
-.compact-loans-table th,.compact-loans-table td,.compact-report-table th,.compact-report-table td{padding:9px 10px}
-.compact-loans-table .loan-main,.compact-loans-table .loan-money,.compact-loans-table .loan-dates,.compact-loans-table .loan-terms,.report-money-stack{display:flex;flex-direction:column;gap:4px}
-.compact-loans-table .loan-main .text-xs,.compact-loans-table .loan-money .text-xs,.compact-loans-table .loan-dates .text-xs,.compact-loans-table .loan-terms .text-xs{line-height:1.25}
-.report-money-stack{min-width:140px}
-.report-line{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;line-height:1.25}
-.report-line span{color:var(--muted)}
-.report-line.total{padding-top:4px;border-top:1px dashed var(--border);font-weight:800}
+.compact-loans-table th,.compact-loans-table td,.compact-report-table th,.compact-report-table td{padding:7px 8px;font-size:12px}
+.compact-loans-table .td-actions{gap:3px;flex-wrap:wrap}
 
 /* ─── Badges ─────────────────────────────────────────────────────────── */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700}
@@ -206,6 +210,7 @@ tfoot td{border-top:2px solid var(--border2);background:var(--surface2);font-wei
 .badge-completed{background:rgba(0,145,255,.12);color:var(--accent2)}
 .badge-pending {background:rgba(255,184,48,.12);color:var(--amber)}
 .badge-rejected{background:rgba(255,77,109,.12);color:var(--red)}
+.badge-written-off{background:rgba(91,127,166,.14);color:var(--muted)}
 .badge-suspended{background:rgba(255,184,48,.12);color:var(--amber)}
 .badge-blacklisted{background:rgba(255,77,109,.12);color:var(--red)}
 .badge-mandatory{background:rgba(167,139,250,.12);color:var(--purple)}
@@ -236,6 +241,10 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
 .donut-legend{flex:1;display:flex;flex-direction:column;gap:8px}
 .legend-item{display:flex;align-items:center;justify-content:space-between;font-size:12px}
 .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-right:6px}
+.cashflow-bars{display:flex;flex-direction:column;gap:10px;margin-top:12px}.cashflow-row{display:grid;grid-template-columns:92px 1fr 86px;align-items:center;gap:10px;font-size:12px}
+.cashflow-track{height:9px;border-radius:999px;background:var(--surface2);overflow:hidden}.cashflow-fill{height:100%;border-radius:999px;min-width:4px}
+.risk-meter{height:10px;border-radius:999px;background:var(--surface2);overflow:hidden;margin:14px 0 10px}.risk-meter-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),var(--amber),var(--red))}
+.chart-kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.chart-kpi{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px}
 
 /* ─── Pagination ─────────────────────────────────────────────────────── */
 .pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:16px}
@@ -268,6 +277,9 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
 .login-sub{color:var(--muted);font-size:13px;margin-top:5px}
 .login-card .form-input{height:44px;background:#f8fafc}
 .login-card .btn-primary{height:44px;justify-content:center}
+.password-field{position:relative}.password-field .form-input{padding-right:70px}
+.password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--accent2);font-size:12px;font-weight:700;padding:6px 7px;border-radius:7px}
+.password-toggle:hover{background:rgba(0,145,255,.08)}
 
 /* --- Page header ────────────────────────────────────────────────────── */
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
@@ -301,7 +313,8 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
 
 /* ─── Responsive ─────────────────────────────────────────────────────── */
 @media(max-width:768px){
-  #topbar{padding:0 12px;height:54px}
+  #topbar{padding:8px 12px;height:auto;min-height:54px;flex-wrap:wrap;gap:8px}
+  .topbar-left{flex:1;min-width:0}.global-search{order:3;flex-basis:100%;max-width:none;min-width:0}
   .page-title{font-size:14px}
   .card{padding:14px}
   .table-wrap{overflow-x:auto}
@@ -418,7 +431,10 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
       </div>
       <div class="form-group">
         <label class="form-label">Password</label>
-        <input id="login-password" type="password" class="form-input" placeholder="Password" value="" autocomplete="new-password" onkeydown="if(event.key=='Enter')doLogin()"/>
+        <div class="password-field">
+          <input id="login-password" type="password" class="form-input" placeholder="Password" value="" autocomplete="new-password" onkeydown="if(event.key=='Enter')doLogin()"/>
+          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('login-password',this)">Show</button>
+        </div>
       </div>
       <div id="login-error" style="display:none;background:rgba(255,77,109,.1);border:1px solid rgba(255,77,109,.2);border-radius:8px;padding:10px;color:var(--red);font-size:13px"></div>
       <button class="btn btn-primary btn-lg w-full" id="login-btn" onclick="doLogin()" style="justify-content:center;margin-top:4px">
@@ -519,11 +535,16 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
   <div id="main">
     <!-- Topbar -->
     <div id="topbar">
-      <div class="flex items-center gap3">
+      <div class="topbar-left">
         <button class="topbar-btn hamburger" onclick="openSidebar()">
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <span class="page-title" id="topbar-title">Dashboard</span>
+      </div>
+      <div class="global-search" id="global-search-box">
+        <svg class="search-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input id="global-search-input" class="form-input" placeholder="Search loans, members, borrowers..." autocomplete="off" oninput="debouncedGlobalSearch()" onfocus="runGlobalSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();openGlobalSearchFirst()}else if(event.key==='Escape'){hideGlobalSearch()}"/>
+        <div id="global-search-results" class="global-search-results"></div>
       </div>
       <div class="topbar-actions">
         <button class="topbar-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark mode">
@@ -630,6 +651,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
               <option value="active">Active</option>
               <option value="overdue">Overdue</option>
               <option value="completed">Completed</option>
+              <option value="written_off">Written Off</option>
               <option value="rejected">Rejected</option>
             </select>
           </div>
@@ -637,8 +659,9 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <div class="table-wrap">
           <table class="loans-table compact-loans-table">
             <thead><tr>
-              <th>Borrower / Loan</th><th>Principal / Balance</th><th>Repaid</th>
-              <th>Dates</th><th>Terms</th><th>Status</th><th>Actions</th>
+              <th>Loan ID</th><th>Member</th><th>Principal</th>
+              <th>Balance (To Pay)</th><th>Rate / Term</th><th>Loan Date</th><th>Due Date</th><th>Method</th><th>Status</th>
+              <th>Repaid Amount</th><th>Actions</th>
             </tr></thead>
             <tbody id="loans-tbody"></tbody>
           </table>
@@ -767,7 +790,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
           <div class="font-bold mb3">Monthly Account Report</div>
           <div class="table-wrap">
             <table class="compact-report-table account-monthly-table">
-              <thead><tr><th>Month</th><th>Opening</th><th>Collections</th><th>Outflows</th><th>Net</th><th>Closing</th></tr></thead>
+              <thead><tr><th>Month</th><th>Opening</th><th>Savings Collected</th><th>Loan Repaid</th><th>Inflow</th><th>Loans Disbursed</th><th>Expenses</th><th>Outflow</th><th>Net</th><th>Closing</th></tr></thead>
               <tbody id="report-account-monthly-tbody"></tbody>
               <tfoot><tr id="report-account-monthly-totals"></tr></tfoot>
             </table>
@@ -895,15 +918,15 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label">Current Password <span class="req">*</span></label>
-        <input id="cp-old" type="password" class="form-input" placeholder="Enter current password"/>
+        <div class="password-field"><input id="cp-old" type="password" class="form-input" placeholder="Enter current password"/><button type="button" class="password-toggle" onclick="togglePasswordVisibility('cp-old',this)">Show</button></div>
       </div>
       <div class="form-group mt3">
         <label class="form-label">New Password <span class="req">*</span></label>
-        <input id="cp-new" type="password" class="form-input" placeholder="Enter new password"/>
+        <div class="password-field"><input id="cp-new" type="password" class="form-input" placeholder="Enter new password"/><button type="button" class="password-toggle" onclick="togglePasswordVisibility('cp-new',this)">Show</button></div>
       </div>
       <div class="form-group mt3">
         <label class="form-label">Confirm New Password <span class="req">*</span></label>
-        <input id="cp-confirm" type="password" class="form-input" placeholder="Re-enter new password"/>
+        <div class="password-field"><input id="cp-confirm" type="password" class="form-input" placeholder="Re-enter new password"/><button type="button" class="password-toggle" onclick="togglePasswordVisibility('cp-confirm',this)">Show</button></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -996,6 +1019,25 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
       <button class="btn-icon" onclick="closeModal('loan-detail-modal')"><svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
     </div>
     <div class="modal-body" id="loan-detail-body"></div>
+  </div>
+</div>
+
+<!-- Loan Restructure Modal -->
+<div class="modal-overlay" id="loan-restructure-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Restructure Loan</span><button class="btn-icon" onclick="closeModal('loan-restructure-modal')"><svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="lr-loan-id"/>
+      <div class="surface2 mb4" id="lr-current-summary">Loading loan details...</div>
+      <div class="grid2 gap4">
+        <div class="form-group"><label class="form-label">New Term (Months) <span class="req">*</span></label><input id="lr-term" type="number" min="1" class="form-input"/></div>
+        <div class="form-group"><label class="form-label">Monthly Rate %</label><input id="lr-rate" type="number" min="0" step="0.01" class="form-input"/></div>
+        <div class="form-group"><label class="form-label">Interest Method</label><select id="lr-method" class="form-select"><option value="reducing">Reducing Balance</option><option value="flat">Flat Rate</option></select></div>
+        <div class="form-group"><label class="form-label">Effective Date</label><input id="lr-date" type="date" class="form-input"/></div>
+      </div>
+      <div class="form-group mt4"><label class="form-label">Reason / Notes</label><textarea id="lr-notes" class="form-textarea" rows="3" placeholder="Why this loan is being restructured"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('loan-restructure-modal')">Cancel</button><button class="btn btn-primary" id="lr-submit-btn" onclick="submitLoanRestructure()">Save Restructure</button></div>
   </div>
 </div>
 
@@ -1096,7 +1138,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <div class="form-group"><label class="form-label">Full Name <span class="req">*</span></label><input id="u-name" class="form-input"/></div>
         <div class="form-group"><label class="form-label">Username <span class="req">*</span></label><input id="u-username" class="form-input"/></div>
         <div class="form-group"><label class="form-label">Email</label><input id="u-email" type="email" class="form-input"/></div>
-        <div class="form-group"><label class="form-label">Password</label><input id="u-pass" type="password" class="form-input"/></div>
+        <div class="form-group"><label class="form-label">Password</label><div class="password-field"><input id="u-pass" type="password" class="form-input"/><button type="button" class="password-toggle" onclick="togglePasswordVisibility('u-pass',this)">Show</button></div></div>
         <div class="form-group"><label class="form-label">Role <span class="req">*</span></label>
           <select id="u-role" class="form-select"><option value="cashier">Cashier</option><option value="officer">Loan Officer</option><option value="accountant">Accountant</option><option value="admin">Admin</option></select>
         </div>
@@ -1124,6 +1166,11 @@ let loanEditId = '';
 let loanEditStatus = '';
 let pendingLoanApplications = [];
 let expenseAccounts = [];
+let globalSearchResults = [];
+let sessionTimer = null;
+let sessionTimeoutListening = false;
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+const SESSION_ACTIVITY_EVENTS = ['click','keydown','mousemove','touchstart','scroll'];
 let appSettings = {};
 let pendingLogoImage = null;
 const THEME_STORAGE_KEY = 'sacco_theme';
@@ -1205,7 +1252,33 @@ function passwordPolicyError(password){
   return '';
 }
 
+function togglePasswordVisibility(inputId,btn){
+  const input=document.getElementById(inputId);
+  if(!input)return;
+  const show=input.type==='password';
+  input.type=show?'text':'password';
+  if(btn)btn.textContent=show?'Hide':'Show';
+}
+
+function getUserPermissions(){
+  const raw=currentUser?.permissions;
+  if(Array.isArray(raw))return raw.map(p=>String(p).toLowerCase());
+  if(typeof raw==='string'){
+    try{return JSON.parse(raw).map(p=>String(p).toLowerCase())}catch(e){return raw.split(',').map(p=>p.trim().toLowerCase()).filter(Boolean)}
+  }
+  return [];
+}
+function userHasPermission(permission){
+  if(currentUser?.role==='admin')return true;
+  const required=String(permission||'').toLowerCase();
+  const [module,action]=required.split('.');
+  return getUserPermissions().some(p=>p===required || p===module || (action && p===`${module}.${action}`));
+}
+function canManageLoanEdits(){return ['admin','officer'].includes(currentUser?.role) || userHasPermission('loans.edit')}
+function canWriteOffLoans(){return ['admin','accountant'].includes(currentUser?.role) || userHasPermission('loans.edit')}
+
 async function api(path, opts={}){
+  if(token)resetSessionTimer();
   const headers = {'Content-Type':'application/json'};
   if(token) headers['Authorization']='Bearer '+token;
   const res = await fetch(API+path,{...opts,headers:{...headers,...(opts.headers||{})}});
@@ -1224,12 +1297,80 @@ function toast(msg, type='success'){
   setTimeout(()=>d.remove(), 4000);
 }
 
+function resetSessionTimer(){
+  if(!token)return;
+  clearTimeout(sessionTimer);
+  sessionTimer=setTimeout(()=>{toast('Session expired after 30 minutes of inactivity','error');doLogout();},SESSION_TIMEOUT_MS);
+}
+function startSessionTimeout(){
+  if(!sessionTimeoutListening){
+    SESSION_ACTIVITY_EVENTS.forEach(evt=>window.addEventListener(evt,resetSessionTimer,{passive:true}));
+    sessionTimeoutListening=true;
+  }
+  resetSessionTimer();
+}
+function stopSessionTimeout(){clearTimeout(sessionTimer);sessionTimer=null}
+
+const debouncedGlobalSearch = debounce(runGlobalSearch,250);
+function hideGlobalSearch(){document.getElementById('global-search-results')?.classList.remove('open')}
+function renderGlobalSearchResults(rows){
+  const box=document.getElementById('global-search-results');
+  if(!box)return;
+  if(!rows.length){box.innerHTML='<div class="global-search-empty">No matching loans, members, or borrowers found.</div>';box.classList.add('open');return}
+  box.innerHTML=rows.map((r,i)=>`<button type="button" class="global-search-result" onmousedown="event.preventDefault();openGlobalSearchResult(${i})"><span><strong>${r.title}</strong><span class="text-muted">${r.meta}</span></span><span class="badge badge-inactive">${r.kind}</span></button>`).join('');
+  box.classList.add('open');
+}
+async function runGlobalSearch(){
+  const input=document.getElementById('global-search-input');
+  const q=(input?.value||'').trim();
+  const box=document.getElementById('global-search-results');
+  if(!q || !token){globalSearchResults=[];hideGlobalSearch();return}
+  if(box){box.innerHTML='<div class="global-search-empty">Searching...</div>';box.classList.add('open')}
+  try{
+    const [loanRes,memberRes,borrowerRes]=await Promise.all([
+      api(`/loans?q=${encodeURIComponent(q)}&status=all&page=1&limit=5`).catch(()=>null),
+      api(`/members?type=member&q=${encodeURIComponent(q)}&status=all&page=1&limit=5`).catch(()=>null),
+      api(`/borrowers?q=${encodeURIComponent(q)}&status=all&page=1&limit=5`).catch(()=>null),
+    ]);
+    const loans=loanRes?.data?.loans||[];
+    const members=memberRes?.data?.members||[];
+    const borrowers=borrowerRes?.data?.borrowers||borrowerRes?.data?.members||[];
+    globalSearchResults=[
+      ...loans.map(l=>({kind:'Loan',title:`${l.id} - ${l.member_name||l.member_id}`,meta:`${badgeText(l.status)} - KES ${fmt(l.outstanding||0,0)} balance`,page:'loans',query:l.id,loanId:l.id})),
+      ...members.map(m=>({kind:'Member',title:`${m.name} (${m.id})`,meta:m.phone||m.email||'Member record',page:'members',query:m.name||m.id})),
+      ...borrowers.map(b=>({kind:'Borrower',title:`${b.name} (${b.id})`,meta:b.phone||b.email||'External borrower',page:'borrowers',query:b.name||b.id})),
+    ].slice(0,12);
+    renderGlobalSearchResults(globalSearchResults);
+  }catch(e){if(box){box.innerHTML='<div class="global-search-empty">Search failed. Try again.</div>';box.classList.add('open')}}
+}
+function openGlobalSearchFirst(){if(globalSearchResults[0])openGlobalSearchResult(0)}
+async function openGlobalSearchResult(index){
+  const item=globalSearchResults[index];
+  if(!item)return;
+  hideGlobalSearch();
+  const input=document.getElementById('global-search-input');
+  if(input)input.value='';
+  navigate(item.page);
+  setTimeout(async()=>{
+    if(item.page==='loans'){
+      const el=document.getElementById('loan-search'); if(el)el.value=item.query||''; loansPage=1; await loadLoans(); if(item.loanId)viewLoan(item.loanId);
+    }else if(item.page==='members'){
+      const el=document.getElementById('member-search'); if(el)el.value=item.query||''; membersPage=1; loadMembers();
+    }else if(item.page==='borrowers'){
+      const el=document.getElementById('borrower-search'); if(el)el.value=item.query||''; borrowersPage=1; loadBorrowers();
+    }
+  },80);
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.global-search'))hideGlobalSearch()});
+
+function badgeText(status){return String(status||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}
 function badge(status){
+  const safe=String(status||'').toLowerCase();
   const map={active:'badge-active',inactive:'badge-inactive',overdue:'badge-overdue',
-    approved:'badge-active',completed:'badge-completed',pending:'badge-pending',rejected:'badge-rejected',
+    approved:'badge-active',completed:'badge-completed',pending:'badge-pending',rejected:'badge-rejected',written_off:'badge-written-off',
     suspended:'badge-suspended',blacklisted:'badge-blacklisted',
     mandatory:'badge-mandatory',voluntary:'badge-voluntary'};
-  return `<span class="badge ${map[status]||'badge-inactive'}">${status}</span>`;
+  return `<span class="badge ${map[safe]||'badge-inactive'}">${badgeText(safe||status)}</span>`;
 }
 
 function methodIcon(m){
@@ -1269,6 +1410,7 @@ async function doLogin(){
 }
 
 function doLogout(){
+  stopSessionTimeout();
   token=null;currentUser=null;
   sessionStorage.removeItem('sacco_token');
   localStorage.removeItem('sacco_token');
@@ -1323,6 +1465,7 @@ async function submitPasswordChange(){
 function initApp(){
   document.getElementById('login-page').style.display='none';
   document.getElementById('app').style.display='flex';
+  startSessionTimeout();
 
   // Populate sidebar user info
   document.getElementById('sb-avatar').textContent = currentUser.name.split(' ').map(n=>n[0]).join('').slice(0,2);
@@ -1447,7 +1590,7 @@ function renderDashCharts(stats,monthly,breakdown){
 
   // Donut
   const total = breakdown.reduce((s,b)=>s+(b.count||0),0)||1;
-  const donutColors={active:'#00e5a0',overdue:'#ff4d6d',completed:'#0091ff',pending:'#ffb830',rejected:'#5b7fa6'};
+  const donutColors={active:'#00e5a0',overdue:'#ff4d6d',completed:'#0091ff',pending:'#ffb830',rejected:'#5b7fa6',written_off:'#64748b'};
   const R=40,CX=50,CY=50,CIRC=2*Math.PI*R;
   let offset=-(CIRC/4);
   const segments=breakdown.map(b=>{
@@ -1455,6 +1598,18 @@ function renderDashCharts(stats,monthly,breakdown){
     const el=`<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${donutColors[b.status]||'#5b7fa6'}" stroke-width="14" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${offset}"/>`;
     offset+=dash;return el;
   }).join('');
+
+  const cashItems=[
+    ['Savings',Number(stats.account_savings_collections||0),'#00e5a0'],
+    ['Loan Repaid',Number(stats.account_loan_repayments||0),'#0091ff'],
+    ['Loans Out',Number(stats.account_loan_disbursed||0),'#ffb830'],
+    ['Expenses',Number(stats.account_expenses||0),'#ff4d6d'],
+  ];
+  const cashMax=Math.max(...cashItems.map(i=>i[1]),1);
+  const cashRows=cashItems.map(([label,value,color])=>`<div class="cashflow-row"><span>${label}</span><div class="cashflow-track"><div class="cashflow-fill" style="width:${Math.max(3,(value/cashMax)*100)}%;background:${color}"></div></div><strong>KES ${fmt(value,0)}</strong></div>`).join('');
+  const risk=Math.max(Number(stats.portfolio_at_risk||0),Number(stats.par30_rate||0));
+  const riskLabel=risk<=10?'Low Risk':risk<=25?'Watch List':'High Risk';
+  const riskColor=risk<=10?'text-green':risk<=25?'text-amber':'text-red';
 
   document.getElementById('dash-charts').innerHTML=`
     <div class="card">
@@ -1478,6 +1633,22 @@ function renderDashCharts(stats,monthly,breakdown){
       <div class="grid2 gap3 text-sm">
         <div><span class="text-muted">Collection Rate</span><div class="font-bold text-green">${stats.collection_rate}%</div></div>
         <div><span class="text-muted">PAR 30</span><div class="font-bold text-red">${fmt(stats.par30_rate,1)}%</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="font-bold mb1">Cashflow Snapshot</div>
+      <div class="text-xs text-muted mb2">Collections, disbursements, and expenses</div>
+      <div class="cashflow-bars">${cashRows}</div>
+    </div>
+    <div class="card">
+      <div class="font-bold mb1">Portfolio Risk</div>
+      <div class="text-xs text-muted mb2">Outstanding portfolio: KES ${fmt(stats.outstanding_portfolio||0,0)}</div>
+      <div class="risk-meter"><div class="risk-meter-fill" style="width:${Math.min(100,Math.max(2,risk))}%"></div></div>
+      <div class="flex items-center justify-between"><span class="${riskColor} font-bold">${riskLabel}</span><strong>${fmt(risk,1)}%</strong></div>
+      <div class="chart-kpi-grid">
+        <div class="chart-kpi"><div class="text-xs text-muted">Arrears</div><div class="font-bold text-red">KES ${fmt(stats.amount_in_arrears||0,0)}</div></div>
+        <div class="chart-kpi"><div class="text-xs text-muted">Due Today</div><div class="font-bold">KES ${fmt(stats.due_today||0,0)}</div></div>
+        <div class="chart-kpi"><div class="text-xs text-muted">PAR 30</div><div class="font-bold text-amber">KES ${fmt(stats.par30_amount||0,0)}</div></div>
       </div>
     </div>`;
 }
@@ -1739,46 +1910,31 @@ async function loadLoans(){
     loansList=loans;
     document.getElementById('loans-sub').textContent=`${total} total loans`;
     const isAdmin=currentUser?.role==='admin';
-    const canCreate=['admin','officer'].includes(currentUser?.role);
-    const canEdit=['admin','officer'].includes(currentUser?.role);
-    const canDelete=['admin','officer'].includes(currentUser?.role);
+    const canCreate=['admin','officer'].includes(currentUser?.role)||userHasPermission('loans.create');
+    const canEdit=canManageLoanEdits();
+    const canDelete=['admin','officer'].includes(currentUser?.role)||userHasPermission('loans.delete');
+    const canWriteOff=canWriteOffLoans();
     document.getElementById('new-loan-btn').style.display=canCreate?'inline-flex':'none';
 
     document.getElementById('loans-tbody').innerHTML=loans.map(l=>`
       <tr>
-        <td data-label="Borrower / Loan">
-          <div class="loan-main">
-            <div class="font-bold">${l.member_name}</div>
-            <div class="text-xs text-accent font-bold" style="font-family:monospace">${l.id}</div>
-            <div class="text-xs text-muted">${l.member_phone||''}</div>
-          </div>
+        <td data-label="Loan ID"><span class="text-accent font-bold" style="font-family:monospace">${l.id}</span></td>
+        <td data-label="Member"><div class="font-bold">${l.member_name}</div><div class="text-xs text-muted">${l.member_phone||''}</div></td>
+        <td data-label="Principal" class="font-bold">KES ${fmt(l.amount,0)}</td>
+        <td data-label="Balance (To Pay)">
+          <div class="font-bold text-amber">KES ${fmt(Math.max(0,l.outstanding||0),0)}</div>
+          <div class="text-xs text-muted">${Math.max(0,Number(l.outstanding||0))<=0.01?'Cleared':'Remaining to pay'}</div>
         </td>
-        <td data-label="Principal / Balance">
-          <div class="loan-money">
-            <div><span class="text-xs text-muted">Principal</span><div class="font-bold">KES ${fmt(l.amount,0)}</div></div>
-            <div><span class="text-xs text-muted">Balance</span><div class="font-bold text-amber">KES ${fmt(Math.max(0,l.outstanding||0),0)}</div></div>
-            <div class="text-xs text-muted">${Math.max(0,Number(l.outstanding||0))<=0.01?'Cleared':'Remaining to pay'}</div>
-          </div>
-        </td>
-        <td data-label="Repaid">
-          <div class="loan-money">
-            <div class="text-green font-bold">KES ${fmt(l.total_paid,0)}</div>
-            ${l.penalties>0?`<div class="text-xs text-red">Penalty: KES ${fmt(l.penalties,0)}</div>`:'<div class="text-xs text-muted">No penalty</div>'}
-          </div>
-        </td>
-        <td data-label="Dates">
-          <div class="loan-dates">
-            <div><span class="text-xs text-muted">Loan</span><div>${fmtSafeD(l.borrowed_date)}</div></div>
-            <div><span class="text-xs text-muted">Due</span><div>${l.next_due_date?fmtSafeD(l.next_due_date):'—'}</div></div>
-          </div>
-        </td>
-        <td data-label="Terms">
-          <div class="loan-terms">
-            <div class="text-muted">${l.annual_rate}% / ${l.term_months}mo</div>
-            <span class="badge badge-inactive" style="font-size:10px">${l.method==='flat'?'Flat':'Reducing'}</span>
-          </div>
-        </td>
+        <td data-label="Rate / Term" class="text-muted">${l.annual_rate}% / ${l.term_months}mo</td>
+        <td data-label="Loan Date" class="text-muted">${fmtSafeD(l.borrowed_date)}</td>
+        <td data-label="Due Date" class="text-muted">${l.next_due_date?fmtSafeD(l.next_due_date):'—'}</td>
+        <td data-label="Method"><span class="badge badge-inactive" style="font-size:10px">${l.method==='flat'?'Flat':'Reducing'}</span></td>
         <td data-label="Status">${badge(l.status)}</td>
+        <td data-label="Repaid Amount">
+          <div class="text-green font-bold">KES ${fmt(l.total_paid,0)}</div>
+          <div class="text-xs text-muted">Total repaid so far</div>
+          ${l.penalties>0?`<div class="text-xs text-red">+${fmt(l.penalties,0)} penalty</div>`:''}
+        </td>
         <td data-label="Actions" class="actions-cell">
           <div class="td-actions">
             <button class="btn-icon" title="View Details" onclick="viewLoan('${l.id}')"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
@@ -1788,6 +1944,10 @@ async function loadLoans(){
               <button class="btn-icon" title="Edit Application" onclick="editLoan('${l.id}')" style="color:var(--amber)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M17.586 3.586a2 2 0 112.828 2.828L12 14.828 8 16l1.172-4 8.414-8.414z"/></svg></button>`:''}
             ${canDelete&&['pending','approved','rejected'].includes(l.status)?`
               <button class="btn-icon" title="Delete Loan" onclick="deleteLoan('${l.id}')" style="color:var(--red)">Del</button>`:''}
+            ${canEdit&&['active','overdue'].includes(l.status)?`
+              <button class="btn-icon" title="Restructure Loan" onclick="openRestructureLoan('${l.id}')" style="color:var(--amber)">Restructure</button>`:''}
+            ${canWriteOff&&['active','overdue'].includes(l.status)?`
+              <button class="btn-icon" title="Write Off Loan" onclick="writeOffLoan('${l.id}')" style="color:var(--red)">Write Off</button>`:''}
             ${isAdmin&&l.status==='pending'?`
               <button class="btn-icon" title="Approve" onclick="approveLoan('${l.id}')" style="color:var(--green)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></button>
               <button class="btn-icon" title="Reject" onclick="rejectLoan('${l.id}')" style="color:var(--red)"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>`:''}
@@ -1795,7 +1955,7 @@ async function loadLoans(){
               <button class="btn-icon" title="Disburse" onclick="disburseLoan('${l.id}')" style="color:var(--accent2)">Disburse</button>`:''}
           </div>
         </td>
-      </tr>`).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">💰</div><div class="empty-msg">No loans found</div></div></td></tr>';
+      </tr>`).join('')||'<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">💰</div><div class="empty-msg">No loans found</div></div></td></tr>';
 
     renderPagination('loans-pagination',pages,loansPage,p=>{loansPage=p;loadLoans()});
   }catch(e){toast(e.message,'error')}
@@ -1936,18 +2096,23 @@ async function viewLoan(id){
     if(!res?.success)return;
     const {loan:l,schedule,repayments,summary,risk={}}=res.data;
     const paidPct=Math.min(100,Math.round((l.total_paid/(summary.total_repayable||1))*100));
+    const canRestructure=canManageLoanEdits()&&['active','overdue'].includes(l.status);
+    const canWriteOff=canWriteOffLoans()&&['active','overdue'].includes(l.status);
     document.getElementById('loan-detail-title').textContent=`Loan ${id} — ${l.member_name}`;
     document.getElementById('loan-detail-body').innerHTML=`
       <div class="flex items-center justify-end gap2 mb3 flex-wrap">
-        ${['admin','officer'].includes(currentUser?.role)&&['pending','approved','rejected'].includes(l.status)?`<button class="btn btn-amber btn-sm" onclick="editLoan('${id}')">Edit Application</button>`:''}
-        ${['admin','officer'].includes(currentUser?.role)&&['pending','approved','rejected'].includes(l.status)?`<button class="btn btn-danger btn-sm" onclick="deleteLoan('${id}')">Delete Loan</button>`:''}
+        ${canManageLoanEdits()&&['pending','approved','rejected'].includes(l.status)?`<button class="btn btn-amber btn-sm" onclick="editLoan('${id}')">Edit Application</button>`:''}
+        ${canManageLoanEdits()&&['pending','approved','rejected'].includes(l.status)?`<button class="btn btn-danger btn-sm" onclick="deleteLoan('${id}')">Delete Loan</button>`:''}
+        ${canRestructure?`<button class="btn btn-amber btn-sm" onclick="openRestructureLoan('${id}')">Restructure</button>`:''}
+        ${canWriteOff?`<button class="btn btn-danger btn-sm" onclick="writeOffLoan('${id}')">Write Off</button>`:''}
         <button class="btn btn-ghost btn-sm" onclick="printLoanStatement('${id}')">PDF Statement</button>
         <button class="btn btn-primary btn-sm" onclick="shareLoanStatementWhatsApp('${id}')">Share WhatsApp</button>
       </div>
       <div class="grid3 gap3 mb4">
         ${[['Principal',`KES ${fmt(l.amount,0)}`],['Interest Rate',`${l.annual_rate}% p.a.`],
           ['Method',l.method==='flat'?'Flat Rate':'Reducing Balance'],['Term',`${l.term_months} months`],
-          ['Approved',fmtSafeD(l.approved_date)],['Disbursed',fmtSafeD(l.disbursed_date)],['Status',badge(l.status)]
+          ['Approved',fmtSafeD(l.approved_date)],['Disbursed',fmtSafeD(l.disbursed_date)],['Status',badge(l.status)],
+          ...(l.status==='written_off' ? [['Written Off',`KES ${fmt(l.written_off_amount||0,0)} on ${fmtSafeD(l.written_off_date)}`]] : [])
         ].map(([k,v])=>`<div class="surface2"><div class="text-xs text-muted mb1">${k}</div><div class="font-bold">${v}</div></div>`).join('')}
       </div>
       <div class="card mb4">
@@ -1969,16 +2134,19 @@ async function viewLoan(id){
           const totalPaid=Math.max(0,Number(summary.total_paid||0));
           let paidCarry=totalPaid;
           const now=new Date();
+          const isWrittenOff=String(l.status||'').toLowerCase()==='written_off';
           return schedule.map(r=>{
             const due=Number(r.repayment||0);
             const rowPaid=Math.max(0,Math.min(paidCarry,due));
             paidCarry=Math.max(0,paidCarry-rowPaid);
-            const rowBalance=Math.max(0,due-rowPaid);
-            const statusHtml=rowPaid+0.01>=due
-              ? '<span class="text-green font-bold">✓ Paid</span>'
-              : rowPaid>0
-                ? `<span class="text-amber">Partial (KES ${fmt(rowPaid,0)} paid)</span>`
-                : (new Date(r.due_date)<now?'<span class="text-red">Overdue</span>':'<span class="text-muted">Pending</span>');
+            const rowBalance=isWrittenOff&&rowPaid+0.01<due?0:Math.max(0,due-rowPaid);
+            const statusHtml=isWrittenOff&&rowPaid+0.01<due
+              ? '<span class="text-muted font-bold">Written off</span>'
+              : rowPaid+0.01>=due
+                ? '<span class="text-green font-bold">✓ Paid</span>'
+                : rowPaid>0
+                  ? `<span class="text-amber">Partial (KES ${fmt(rowPaid,0)} paid)</span>`
+                  : (new Date(r.due_date)<now?'<span class="text-red">Overdue</span>':'<span class="text-muted">Pending</span>');
             return `<tr>
               <td class="text-muted">${r.installment}</td>
               <td>${fmtSafeD(r.due_date)}</td>
@@ -2050,6 +2218,68 @@ async function deleteLoan(id){
     const res=await api(`/loans/${id}`,{method:'DELETE'});
     if(res?.success){
       toast(res.message||'Loan deleted');
+      closeModal('loan-detail-modal');
+      loadLoans();
+      loadDashboard();
+    }
+  }catch(e){toast(e.message,'error')}
+}
+
+async function openRestructureLoan(id){
+  if(!canManageLoanEdits()){toast('Insufficient permissions','error');return}
+  try{
+    const res=await api(`/loans/${id}`);
+    if(!res?.success)return;
+    const l=res.data.loan;
+    const s=res.data.summary||{};
+    document.getElementById('lr-loan-id').value=id;
+    document.getElementById('lr-term').value=l.term_months||1;
+    document.getElementById('lr-rate').value=l.annual_rate||0;
+    document.getElementById('lr-method').value=l.method||'reducing';
+    document.getElementById('lr-date').value=today();
+    document.getElementById('lr-notes').value='';
+    document.getElementById('lr-current-summary').innerHTML=`<div class="font-bold mb1">${id} - ${l.member_name}</div><div class="text-sm text-muted">Outstanding balance to reschedule: <strong>KES ${fmt(s.outstanding||0,0)}</strong></div>`;
+    openModal('loan-restructure-modal');
+  }catch(e){toast(e.message,'error')}
+}
+
+async function submitLoanRestructure(){
+  const id=document.getElementById('lr-loan-id').value;
+  const term=Number(document.getElementById('lr-term').value||0);
+  if(!id||term<1){toast('Term must be at least 1 month','error');return}
+  const btn=document.getElementById('lr-submit-btn');
+  if(btn){btn.disabled=true;btn.textContent='Saving...'}
+  const detailOpen=document.getElementById('loan-detail-modal')?.classList.contains('open');
+  try{
+    const res=await api(`/loans/${id}/restructure`,{method:'POST',body:JSON.stringify({
+      term_months:term,
+      annual_rate:Number(document.getElementById('lr-rate').value||0),
+      method:document.getElementById('lr-method').value||'reducing',
+      effective_date:document.getElementById('lr-date').value||today(),
+      notes:document.getElementById('lr-notes').value||''
+    })});
+    if(res?.success){
+      toast(res.message||'Loan restructured');
+      closeModal('loan-restructure-modal');
+      await loadLoans();
+      loadDashboard();
+      if(detailOpen)viewLoan(id);
+    }
+  }catch(e){toast(e.message,'error')}
+  finally{if(btn){btn.disabled=false;btn.textContent='Save Restructure'}}
+}
+
+async function writeOffLoan(id){
+  if(!canWriteOffLoans()){toast('Insufficient permissions','error');return}
+  const reason=prompt(`Reason for writing off loan ${id}:`);
+  if(!reason || !reason.trim())return;
+  const write_off_date=prompt('Write-off date (YYYY-MM-DD)', today());
+  if(!write_off_date)return;
+  if(!confirm(`Write off loan ${id}? This will close the outstanding balance without adding cash to the main account.`))return;
+  try{
+    const res=await api(`/loans/${id}/write-off`,{method:'POST',body:JSON.stringify({reason,write_off_date})});
+    if(res?.success){
+      toast(res.message||'Loan written off');
       closeModal('loan-detail-modal');
       loadLoans();
       loadDashboard();
@@ -2534,48 +2764,31 @@ function renderAccountMonthlyReport(data){
 
   tbody.innerHTML=rows.map(r=>`
     <tr>
-      <td class="font-bold" data-label="Month">${fmtMonthLabel(r.month)}</td>
-      <td data-label="Opening">KES ${fmt(r.opening_balance||0,0)}</td>
-      <td data-label="Collections">
-        <div class="report-money-stack">
-          <div class="report-line"><span>Savings</span><strong class="text-green">KES ${fmt(r.savings_collections||0,0)}</strong></div>
-          <div class="report-line"><span>Repaid</span><strong class="text-green">KES ${fmt(r.loan_repayments||0,0)}</strong></div>
-          <div class="report-line total"><span>Inflow</span><strong class="text-green">KES ${fmt(r.inflow||0,0)}</strong></div>
-        </div>
-      </td>
-      <td data-label="Outflows">
-        <div class="report-money-stack">
-          <div class="report-line"><span>Loans</span><strong class="text-red">KES ${fmt(r.loan_disbursed||0,0)}</strong></div>
-          <div class="report-line"><span>Expenses</span><strong class="text-red">KES ${fmt(r.expenses||0,0)}</strong></div>
-          <div class="report-line total"><span>Outflow</span><strong class="text-red">KES ${fmt(r.outflow||0,0)}</strong></div>
-        </div>
-      </td>
-      <td data-label="Net" class="${Number(r.net||0)>=0?'text-green':'text-red'} font-bold">${Number(r.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(r.net||0)),0)}</td>
-      <td data-label="Closing" class="font-bold">KES ${fmt(r.closing_balance||0,0)}</td>
+      <td class="font-bold">${fmtMonthLabel(r.month)}</td>
+      <td>KES ${fmt(r.opening_balance||0,0)}</td>
+      <td class="text-green">KES ${fmt(r.savings_collections||0,0)}</td>
+      <td class="text-green">KES ${fmt(r.loan_repayments||0,0)}</td>
+      <td class="text-green font-bold">KES ${fmt(r.inflow||0,0)}</td>
+      <td class="text-red">KES ${fmt(r.loan_disbursed||0,0)}</td>
+      <td class="text-red">KES ${fmt(r.expenses||0,0)}</td>
+      <td class="text-red font-bold">KES ${fmt(r.outflow||0,0)}</td>
+      <td class="${Number(r.net||0)>=0?'text-green':'text-red'} font-bold">${Number(r.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(r.net||0)),0)}</td>
+      <td class="font-bold">KES ${fmt(r.closing_balance||0,0)}</td>
     </tr>
-  `).join('')||'<tr><td colspan="6"><div class="empty-state"><div class="empty-msg">No monthly account activity yet</div></div></td></tr>';
+  `).join('')||'<tr><td colspan="10"><div class="empty-state"><div class="empty-msg">No monthly account activity yet</div></div></td></tr>';
 
   tfoot.innerHTML=`
-    <td class="font-bold" data-label="Month">TOTALS (${rows.length} months)</td>
-    <td class="font-bold" data-label="Opening">KES ${fmt(opening,0)}</td>
-    <td data-label="Collections">
-      <div class="report-money-stack">
-        <div class="report-line"><span>Savings</span><strong class="text-green">KES ${fmt(totals.savings_collections||0,0)}</strong></div>
-        <div class="report-line"><span>Repaid</span><strong class="text-green">KES ${fmt(totals.loan_repayments||0,0)}</strong></div>
-        <div class="report-line total"><span>Inflow</span><strong class="text-green">KES ${fmt(totals.inflow||0,0)}</strong></div>
-      </div>
-    </td>
-    <td data-label="Outflows">
-      <div class="report-money-stack">
-        <div class="report-line"><span>Loans</span><strong class="text-red">KES ${fmt(totals.loan_disbursed||0,0)}</strong></div>
-        <div class="report-line"><span>Expenses</span><strong class="text-red">KES ${fmt(totals.expenses||0,0)}</strong></div>
-        <div class="report-line total"><span>Outflow</span><strong class="text-red">KES ${fmt(totals.outflow||0,0)}</strong></div>
-      </div>
-    </td>
-    <td class="font-bold ${Number(totals.net||0)>=0?'text-green':'text-red'}" data-label="Net">${Number(totals.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(totals.net||0)),0)}</td>
-    <td class="font-bold" data-label="Closing">KES ${fmt(closing,0)}</td>`;
+    <td class="font-bold">TOTALS (${rows.length} months)</td>
+    <td class="font-bold">KES ${fmt(opening,0)}</td>
+    <td class="font-bold text-green">KES ${fmt(totals.savings_collections||0,0)}</td>
+    <td class="font-bold text-green">KES ${fmt(totals.loan_repayments||0,0)}</td>
+    <td class="font-bold text-green">KES ${fmt(totals.inflow||0,0)}</td>
+    <td class="font-bold text-red">KES ${fmt(totals.loan_disbursed||0,0)}</td>
+    <td class="font-bold text-red">KES ${fmt(totals.expenses||0,0)}</td>
+    <td class="font-bold text-red">KES ${fmt(totals.outflow||0,0)}</td>
+    <td class="font-bold ${Number(totals.net||0)>=0?'text-green':'text-red'}">${Number(totals.net||0)>=0?'+':'-'}KES ${fmt(Math.abs(Number(totals.net||0)),0)}</td>
+    <td class="font-bold">KES ${fmt(closing,0)}</td>`;
 }
-
 function exportReport(type, formatOpt=null){
   const format=(formatOpt||document.getElementById('report-export-format')?.value||'csv').toLowerCase();
   const safeFormat=(format==='xlsx'?'xlsx':'csv');

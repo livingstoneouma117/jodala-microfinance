@@ -127,10 +127,15 @@ def init_db():
         total_paid      REAL NOT NULL DEFAULT 0,
         penalties       REAL NOT NULL DEFAULT 0,
         notes           TEXT,
+        written_off_amount REAL NOT NULL DEFAULT 0,
+        written_off_date   TEXT,
+        written_off_reason TEXT,
+        written_off_by     INTEGER,
         created_at      TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (member_id)   REFERENCES members(id),
         FOREIGN KEY (approved_by) REFERENCES users(id),
-        FOREIGN KEY (officer_id)  REFERENCES users(id)
+        FOREIGN KEY (officer_id)  REFERENCES users(id),
+        FOREIGN KEY (written_off_by) REFERENCES users(id)
     )""")
 
     # ── Loan Schedule ────────────────────────────────────────────────────────
@@ -575,6 +580,15 @@ def _migrate_schema(c):
     loan_cols = {row[1] for row in c.execute("PRAGMA table_info(loans)").fetchall()}
     if loan_cols and "penalties" not in loan_cols:
         c.execute("ALTER TABLE loans ADD COLUMN penalties REAL NOT NULL DEFAULT 0")
+    loan_writeoff_columns = {
+        "written_off_amount": "ALTER TABLE loans ADD COLUMN written_off_amount REAL NOT NULL DEFAULT 0",
+        "written_off_date": "ALTER TABLE loans ADD COLUMN written_off_date TEXT",
+        "written_off_reason": "ALTER TABLE loans ADD COLUMN written_off_reason TEXT",
+        "written_off_by": "ALTER TABLE loans ADD COLUMN written_off_by INTEGER",
+    }
+    for column, ddl in loan_writeoff_columns.items():
+        if loan_cols and column not in loan_cols:
+            c.execute(ddl)
 
     schedule_cols = {row[1] for row in c.execute("PRAGMA table_info(loan_schedule)").fetchall()}
     if schedule_cols and "penalty" not in schedule_cols:

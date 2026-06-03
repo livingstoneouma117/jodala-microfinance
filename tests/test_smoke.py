@@ -80,6 +80,39 @@ def test_overdue_penalties_are_applied_to_outstanding(client):
     assert any(float(row.get("penalty") or 0) > 0 for row in payload["schedule"])
 
 
+def test_admin_can_write_off_overdue_loan(client):
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    before = client.get("/api/loans/L004", headers=headers)
+    assert before.status_code == 200
+    before_payload = before.get_json()["data"]
+    before_outstanding = float(before_payload["summary"]["outstanding"] or 0)
+    assert before_outstanding > 0
+
+    written_off = client.post(
+        "/api/loans/L004/write-off",
+        json={"reason": "Unrecoverable test balance", "write_off_date": "2026-06-03"},
+        headers=headers,
+    )
+    assert written_off.status_code == 200
+    assert written_off.get_json()["data"]["written_off_amount"] == pytest.approx(before_outstanding)
+
+    detail = client.get("/api/loans/L004", headers=headers)
+    assert detail.status_code == 200
+    payload = detail.get_json()["data"]
+    assert payload["loan"]["status"] == "written_off"
+    assert float(payload["loan"]["written_off_amount"] or 0) == pytest.approx(before_outstanding)
+    assert float(payload["loan"]["penalties"] or 0) == pytest.approx(0)
+    assert float(payload["summary"]["outstanding"] or 0) == pytest.approx(0)
+
+    listing = client.get("/api/loans?q=L004&status=all", headers=headers)
+    assert listing.status_code == 200
+    loan = listing.get_json()["data"]["loans"][0]
+    assert loan["status"] == "written_off"
+    assert float(loan["outstanding"] or 0) == pytest.approx(0)
+
+
 def test_admin_can_assign_roles_and_non_admin_cannot(client):
     admin_token = _login(client)
     admin_headers = {"Authorization": f"Bearer {admin_token}"}

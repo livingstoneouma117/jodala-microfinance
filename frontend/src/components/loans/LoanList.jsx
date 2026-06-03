@@ -26,6 +26,7 @@ function LoanDetails({ loanId, onChanged, user }) {
   const [members, setMembers] = useState([]);
   const [guarantorForm, setGuarantorForm] = useState({ guarantor_id: "", amount: "", notes: "" });
   const [restructureForm, setRestructureForm] = useState({ term_months: "", annual_rate: "", method: "reducing", effective_date: TODAY, notes: "" });
+  const [writeOffForm, setWriteOffForm] = useState({ reason: "", write_off_date: TODAY });
   const [saving, setSaving] = useState(false);
   const pushToast = useToast();
 
@@ -69,7 +70,9 @@ function LoanDetails({ loanId, onChanged, user }) {
   const schedule = payload.schedule || [];
   const guarantors = payload.guarantors || [];
   const canEditLoans = canAccess(user, ["admin", "officer"], ["loans.edit"]);
-  const canRestructure = canEditLoans && ["active", "overdue"].includes(String(loan.status || "").toLowerCase());
+  const loanStatus = String(loan.status || "").toLowerCase();
+  const canRestructure = canEditLoans && ["active", "overdue"].includes(loanStatus);
+  const canWriteOff = canAccess(user, ["admin", "accountant"], ["loans.edit"]) && ["active", "overdue"].includes(loanStatus);
 
   async function addGuarantor(event) {
     event.preventDefault();
@@ -126,6 +129,29 @@ function LoanDetails({ loanId, onChanged, user }) {
       onChanged?.();
     } catch (err) {
       pushToast(err.message || "Could not restructure loan", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function writeOffLoan(event) {
+    event.preventDefault();
+    if (!writeOffForm.reason.trim()) {
+      pushToast("Write-off reason is required", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/api/loans/${loanId}/write-off`, {
+        method: "POST",
+        body: JSON.stringify(writeOffForm),
+      });
+      pushToast("Loan written off.", "success");
+      setWriteOffForm({ reason: "", write_off_date: TODAY });
+      await loadDetails();
+      onChanged?.();
+    } catch (err) {
+      pushToast(err.message || "Could not write off loan", "error");
     } finally {
       setSaving(false);
     }
@@ -195,6 +221,22 @@ function LoanDetails({ loanId, onChanged, user }) {
             </div>
             <label>Reason / Notes<input value={restructureForm.notes} onChange={(event) => setRestructureForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional" /></label>
             <button type="submit" className="primary-btn" disabled={saving}>{saving ? "Saving..." : "Restructure Loan"}</button>
+          </form>
+        )}
+      </section>
+
+      <section className="surface-card stack">
+        <div className="row-between">
+          <h4>Loan Write-off</h4>
+          <span className="muted">Close unrecoverable balances without recording cash received.</span>
+        </div>
+        {!canWriteOff ? <p className="muted">Only active or overdue loans can be written off by admins, accountants, or users with Loans - Edit.</p> : (
+          <form className="stack" onSubmit={writeOffLoan}>
+            <div className="two-col">
+              <label>Write-off Date<input type="date" value={writeOffForm.write_off_date} onChange={(event) => setWriteOffForm((prev) => ({ ...prev, write_off_date: event.target.value }))} /></label>
+              <label>Reason<input value={writeOffForm.reason} onChange={(event) => setWriteOffForm((prev) => ({ ...prev, reason: event.target.value }))} placeholder="e.g. borrower defaulted" required /></label>
+            </div>
+            <button type="submit" className="danger-btn" disabled={saving}>{saving ? "Saving..." : "Write Off Loan"}</button>
           </form>
         )}
       </section>
@@ -292,7 +334,7 @@ function LoanList({ refreshToken, user }) {
       <div className="toolbar">
         <input type="search" placeholder="Search loan, borrower, purpose" value={q} onChange={(event) => { setPage(1); setQ(event.target.value); }} />
         <select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }}>
-          <option value="all">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="overdue">Overdue</option><option value="completed">Completed</option><option value="rejected">Rejected</option>
+          <option value="all">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="overdue">Overdue</option><option value="completed">Completed</option><option value="written_off">Written Off</option><option value="rejected">Rejected</option>
         </select>
       </div>
       {error ? <p className="error-box">{error}</p> : null}

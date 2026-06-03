@@ -11,6 +11,7 @@ export function statusClass(status) {
   if (safe === "approved") return "status status-approved";
   if (safe === "pending") return "status status-pending";
   if (safe === "rejected") return "status status-rejected";
+  if (safe === "written_off") return "status status-written-off";
   return "status";
 }
 

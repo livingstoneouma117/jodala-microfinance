@@ -1,4 +1,4 @@
-from flask_compat import Blueprint
+from api import Blueprint
 
 from services.common import *
 
@@ -277,7 +277,7 @@ def export_report(report_type):
         return error("Unsupported export format. Use csv or xlsx.")
 
     db.close()
-    from flask_compat import Response
+    from api import Response
     audit(f"Exported {report_type} report", "Reports")
     if export_format == "xlsx":
         try:
@@ -332,3 +332,4 @@ def export_report(report_type):
 # ══════════════════════════════════════════════════════════════════════════════
 # ACCOUNTING
 # ══════════════════════════════════════════════════════════════════════════════
+

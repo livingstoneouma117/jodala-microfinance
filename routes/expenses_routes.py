@@ -1,4 +1,4 @@
-from flask_compat import Blueprint
+from api import Blueprint
 
 from services.common import *
 
@@ -304,3 +304,4 @@ def delete_expense_transaction(expense_id):
 # ══════════════════════════════════════════════════════════════════════════════
 # REPORTS
 # ══════════════════════════════════════════════════════════════════════════════
+

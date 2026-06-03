@@ -1,4 +1,4 @@
-from flask_compat import Blueprint
+from api import Blueprint
 
 from services.common import *
 from services.common import _clear_login_attempts, _login_attempt_key, _login_block_remaining_seconds, _record_failed_login
@@ -283,4 +283,5 @@ def delete_user(user_id):
     db.commit(); db.close()
     audit(f"Deleted user {user.get('username') or user.get('email')}", "Users")
     return success(msg="User deleted")
+
 

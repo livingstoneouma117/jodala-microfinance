@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
-from starlette.datastructures import Headers, QueryParams
+from starlette.datastructures import QueryParams
 
 
 _request_state: ContextVar[SimpleNamespace | None] = ContextVar("request_state", default=None)

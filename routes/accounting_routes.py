@@ -1,4 +1,4 @@
-from flask_compat import Blueprint
+from api import Blueprint
 
 from services.common import *
 
@@ -121,3 +121,4 @@ def accounting_cash_flow():
 # ══════════════════════════════════════════════════════════════════════════════
 # NOTIFICATIONS
 # ══════════════════════════════════════════════════════════════════════════════
+

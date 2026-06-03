@@ -1,4 +1,4 @@
-from flask_compat import Blueprint
+from api import Blueprint
 
 from services.common import *
 
@@ -247,3 +247,4 @@ def savings_withdraw():
 # ══════════════════════════════════════════════════════════════════════════════
 # EXPENSES
 # ══════════════════════════════════════════════════════════════════════════════
+

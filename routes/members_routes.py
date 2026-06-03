@@ -1,4 +1,4 @@
-from flask_compat import Blueprint
+from api import Blueprint
 
 from services.common import *
 
@@ -215,3 +215,4 @@ def create_borrower():
 # ══════════════════════════════════════════════════════════════════════════════
 # LOAN PRODUCTS
 # ══════════════════════════════════════════════════════════════════════════════
+

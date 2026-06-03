@@ -1,4 +1,4 @@
-from flask_compat import Blueprint
+from api import Blueprint
 
 from services.common import *
 
@@ -764,4 +764,5 @@ def get_loan_schedule(loan_id):
 # ══════════════════════════════════════════════════════════════════════════════
 # REPAYMENTS
 # ══════════════════════════════════════════════════════════════════════════════
+
 

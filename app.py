@@ -1,6 +1,13 @@
-from flask import Flask, jsonify, request, send_from_directory, make_response
+from __future__ import annotations
+
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
 
 from database import init_db
 from services.common import *
@@ -15,49 +22,57 @@ from routes.accounting_routes import accounting_bp
 from routes.settings_routes import settings_bp
 from routes.dashboard_routes import dashboard_bp
 
-FRONTEND_DIR = os.path.dirname(__file__)
-REACT_DIST_DIR = os.path.join(FRONTEND_DIR, "frontend", "dist")
-app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
+FRONTEND_DIR = Path(__file__).resolve().parent
+REACT_DIST_DIR = FRONTEND_DIR / "frontend" / "dist"
 
-# Manual CORS (no flask-cors available)
-@app.after_request
-def add_cors(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    return response
+app = FastAPI(title="SACCOFinance LMS", version="3.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.before_request
-def handle_options():
-    if request.method == "OPTIONS":
-        return make_response("", 204)
 
-app.register_blueprint(auth_bp)
-app.register_blueprint(members_bp)
-app.register_blueprint(loans_bp)
-app.register_blueprint(repayments_bp)
-app.register_blueprint(savings_bp)
-app.register_blueprint(expenses_bp)
-app.register_blueprint(reports_bp)
-app.register_blueprint(accounting_bp)
-app.register_blueprint(settings_bp)
-app.register_blueprint(dashboard_bp)
+def _serve_index(directory: Path) -> FileResponse:
+    return FileResponse(directory / "index.html")
 
-@app.route("/")
-def index():
-    return send_from_directory(FRONTEND_DIR, "index.html")
 
-@app.route("/v3", defaults={"path": ""})
-@app.route("/v3/<path:path>")
-def index_v3(path):
-    if path and os.path.exists(os.path.join(REACT_DIST_DIR, path)):
-        return send_from_directory(REACT_DIST_DIR, path)
-    return send_from_directory(REACT_DIST_DIR, "index.html")
+app.include_router(auth_bp.router)
+app.include_router(members_bp.router)
+app.include_router(loans_bp.router)
+app.include_router(repayments_bp.router)
+app.include_router(savings_bp.router)
+app.include_router(expenses_bp.router)
+app.include_router(reports_bp.router)
+app.include_router(accounting_bp.router)
+app.include_router(settings_bp.router)
+app.include_router(dashboard_bp.router)
 
-# LOAN CALCULATOR (public - no auth)
-@app.route("/api/calculate", methods=["POST"])
-def calculate():
-    d = request.json or {}
+
+@app.options("/{path:path}", include_in_schema=False)
+async def options_passthrough(path: str):
+    return Response(status_code=204)
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return _serve_index(FRONTEND_DIR)
+
+
+@app.get("/v3", include_in_schema=False)
+@app.get("/v3/{path:path}", include_in_schema=False)
+async def index_v3(path: str = ""):
+    asset = REACT_DIST_DIR / path if path else None
+    if asset and asset.exists():
+        return FileResponse(asset)
+    return _serve_index(REACT_DIST_DIR)
+
+
+@app.post("/api/calculate")
+async def calculate(req: Request):
+    d = await req.json() if req else {}
     try:
         principal = float(d["amount"])
         annual_rate = float(d["annual_rate"])
@@ -77,14 +92,15 @@ def calculate():
         "schedule": schedule[:6],
     })
 
-# HEALTH CHECK
-@app.route("/api/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok", "version": "3.0.0", "timestamp": datetime.utcnow().isoformat()})
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "version": "3.0.0", "timestamp": datetime.now(timezone.utc).isoformat()}
+
 
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", "5000"))
     debug_mode = os.environ.get("DEBUG", "false").strip().lower() == "true"
     print(f"SACCOFinance API running on http://localhost:{port}")
-    app.run(debug=debug_mode, port=port, host="0.0.0.0")
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=debug_mode, log_level="info")

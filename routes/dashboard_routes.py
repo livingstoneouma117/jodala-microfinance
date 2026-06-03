@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask_compat import Blueprint
 
 from services.common import *
 

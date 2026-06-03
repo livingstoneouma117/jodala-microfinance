@@ -1,4 +1,4 @@
-from flask import g, jsonify, make_response, request, send_file
+from flask_compat import g, jsonify, make_response, request, send_file
 import base64
 import json
 import os
@@ -1343,3 +1343,4 @@ def rebuild_loan_schedule(db, loan: dict, start_date: str) -> None:
     if not schedule:
         return
     allocate_repayment_to_schedule(db, loan["id"], start_date)
+

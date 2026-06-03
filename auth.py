@@ -8,7 +8,7 @@ import hashlib
 import time
 import uuid
 from functools import wraps
-from flask import request, jsonify, g
+from flask_compat import request, jsonify, g
 
 from database import get_db
 from security import hash_password, verify_password, password_needs_upgrade
@@ -307,3 +307,4 @@ def roles_required(*roles):
             return jsonify({"error": "Insufficient permissions"}), 403
         return decorated
     return decorator
+

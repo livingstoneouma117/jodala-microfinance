@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 
 def _fresh_app(tmp_path, monkeypatch):
@@ -19,8 +20,7 @@ def _fresh_app(tmp_path, monkeypatch):
     sys.modules["jodala_app"] = app_module
     spec.loader.exec_module(app_module)
     app_module.init_db()
-    app_module.app.config.update(TESTING=True)
-    return app_module.app.test_client()
+    return TestClient(app_module.app)
 
 
 @pytest.fixture()
@@ -31,7 +31,7 @@ def client(tmp_path, monkeypatch):
 def _login(client, username="admin", password="admin123"):
     response = client.post("/api/auth/login", json={"username": username, "password": password})
     assert response.status_code == 200
-    payload = response.get_json()
+    payload = response.json()
     assert payload["success"] is True
     return payload["data"]["token"]
 
@@ -39,7 +39,7 @@ def _login(client, username="admin", password="admin123"):
 def test_health_check(client):
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.get_json()["status"] == "ok"
+    assert response.json()["status"] == "ok"
 
 
 def test_login_success_and_failure(client):
@@ -48,7 +48,7 @@ def test_login_success_and_failure(client):
 
     failed = client.post("/api/auth/login", json={"username": "admin", "password": "wrong-password"})
     assert failed.status_code == 401
-    assert failed.get_json()["success"] is False
+    assert failed.json()["success"] is False
 
 
 def test_password_hashes_are_bcrypt_and_login_rate_limit_persists(client, tmp_path, monkeypatch):
@@ -76,8 +76,8 @@ def test_report_export_requires_auth_and_returns_csv(client):
     token = _login(client)
     response = client.get("/api/reports/export/members?format=csv", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
-    assert response.mimetype == "text/csv"
-    assert b"ID,Name" in response.data
+    assert response.headers.get('content-type').split(';')[0] == "text/csv"
+    assert b"ID,Name" in response.content
 
 
 def test_overdue_penalties_are_applied_to_outstanding(client):
@@ -86,7 +86,7 @@ def test_overdue_penalties_are_applied_to_outstanding(client):
 
     response = client.get("/api/loans?status=all&limit=100", headers=headers)
     assert response.status_code == 200
-    loans = response.get_json()["data"]["loans"]
+    loans = response.json()["data"]["loans"]
     penalized = [loan for loan in loans if float(loan.get("penalties") or 0) > 0]
     assert penalized
 
@@ -95,7 +95,7 @@ def test_overdue_penalties_are_applied_to_outstanding(client):
 
     detail = client.get(f"/api/loans/{loan['id']}", headers=headers)
     assert detail.status_code == 200
-    payload = detail.get_json()["data"]
+    payload = detail.json()["data"]
     assert float(payload["summary"]["penalties"]) == float(loan["penalties"])
     assert any(float(row.get("penalty") or 0) > 0 for row in payload["schedule"])
 
@@ -106,7 +106,7 @@ def test_admin_can_write_off_overdue_loan(client):
 
     before = client.get("/api/loans/L004", headers=headers)
     assert before.status_code == 200
-    before_payload = before.get_json()["data"]
+    before_payload = before.json()["data"]
     before_outstanding = float(before_payload["summary"]["outstanding"] or 0)
     assert before_outstanding > 0
 
@@ -116,11 +116,11 @@ def test_admin_can_write_off_overdue_loan(client):
         headers=headers,
     )
     assert written_off.status_code == 200
-    assert written_off.get_json()["data"]["written_off_amount"] == pytest.approx(before_outstanding)
+    assert written_off.json()["data"]["written_off_amount"] == pytest.approx(before_outstanding)
 
     detail = client.get("/api/loans/L004", headers=headers)
     assert detail.status_code == 200
-    payload = detail.get_json()["data"]
+    payload = detail.json()["data"]
     assert payload["loan"]["status"] == "written_off"
     assert float(payload["loan"]["written_off_amount"] or 0) == pytest.approx(before_outstanding)
     assert float(payload["loan"]["penalties"] or 0) == pytest.approx(0)
@@ -128,7 +128,7 @@ def test_admin_can_write_off_overdue_loan(client):
 
     listing = client.get("/api/loans?q=L004&status=all", headers=headers)
     assert listing.status_code == 200
-    loan = listing.get_json()["data"]["loans"][0]
+    loan = listing.json()["data"]["loans"][0]
     assert loan["status"] == "written_off"
     assert float(loan["outstanding"] or 0) == pytest.approx(0)
 
@@ -139,7 +139,7 @@ def test_admin_can_restructure_active_loan_and_log_it(client):
 
     before = client.get("/api/loans/L004", headers=headers)
     assert before.status_code == 200
-    before_payload = before.get_json()["data"]
+    before_payload = before.json()["data"]
     before_loan = before_payload["loan"]
     before_schedule = before_payload["schedule"]
     paid_count = before_payload["summary"]["installments_paid"]
@@ -162,14 +162,14 @@ def test_admin_can_restructure_active_loan_and_log_it(client):
         headers=headers,
     )
     assert response.status_code == 200
-    payload = response.get_json()["data"]
+    payload = response.json()["data"]
     assert float(payload["annual_rate"]) == pytest.approx(new_rate)
     assert int(payload["term_months"]) == new_term
     assert payload["method"] == new_method
 
     detail = client.get("/api/loans/L004", headers=headers)
     assert detail.status_code == 200
-    detail_payload = detail.get_json()["data"]
+    detail_payload = detail.json()["data"]
     assert detail_payload["loan"]["status"] == "active"
     assert int(detail_payload["loan"]["term_months"]) == new_term
     assert float(detail_payload["loan"]["annual_rate"]) == pytest.approx(new_rate)
@@ -179,7 +179,7 @@ def test_admin_can_restructure_active_loan_and_log_it(client):
 
     logs = client.get("/api/audit-logs?module=Loans&limit=20", headers=headers)
     assert logs.status_code == 200
-    audit_rows = logs.get_json()["data"]["logs"]
+    audit_rows = logs.json()["data"]["logs"]
     assert any(
         row["action"] == "Restructured loan L004" and "Status" in (row.get("details") or "")
         for row in audit_rows
@@ -192,7 +192,7 @@ def test_admin_can_assign_roles_and_non_admin_cannot(client):
 
     users_response = client.get("/api/users", headers=admin_headers)
     assert users_response.status_code == 200
-    users = users_response.get_json()["data"]
+    users = users_response.json()["data"]
     target = next(user for user in users if user["username"] == "cashier")
 
     update = client.patch(
@@ -201,7 +201,7 @@ def test_admin_can_assign_roles_and_non_admin_cannot(client):
         headers=admin_headers,
     )
     assert update.status_code == 200
-    assert update.get_json()["data"]["role"] == "officer"
+    assert update.json()["data"]["role"] == "officer"
 
     officer_token = _login(client, "officer", "officer123")
     denied = client.patch(
@@ -216,7 +216,7 @@ def test_admin_granted_permission_allows_officer_to_do_admin_only_action(client)
     admin_token = _login(client)
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
-    users = client.get("/api/users", headers=admin_headers).get_json()["data"]
+    users = client.get("/api/users", headers=admin_headers).json()["data"]
     officer = next(user for user in users if user["username"] == "officer")
 
     denied_token = _login(client, "cashier", "cashier123")
@@ -268,7 +268,7 @@ def test_admin_granted_permission_allows_officer_to_do_admin_only_action(client)
         headers={"Authorization": f"Bearer {officer_token}"},
     )
     assert created.status_code == 201
-    assert created.get_json()["data"]["name"] == "Officer Managed Product"
+    assert created.json()["data"]["name"] == "Officer Managed Product"
 
 
 def test_expense_edit_and_delete_updates_main_account_balance(client):
@@ -277,7 +277,7 @@ def test_expense_edit_and_delete_updates_main_account_balance(client):
 
     initial = client.get("/api/dashboard", headers=headers)
     assert initial.status_code == 200
-    starting_balance = float(initial.get_json()["data"]["stats"]["account_current_balance"] or 0)
+    starting_balance = float(initial.json()["data"]["stats"]["account_current_balance"] or 0)
 
     funded = client.post("/api/settings/account/add", json={"amount": 1000}, headers=headers)
     assert funded.status_code == 200
@@ -288,7 +288,7 @@ def test_expense_edit_and_delete_updates_main_account_balance(client):
         headers=headers,
     )
     assert account.status_code == 201
-    account_id = account.get_json()["data"]["id"]
+    account_id = account.json()["data"]["id"]
 
     created = client.post(
         "/api/expenses/transactions",
@@ -296,10 +296,10 @@ def test_expense_edit_and_delete_updates_main_account_balance(client):
         headers=headers,
     )
     assert created.status_code == 201
-    expense_id = created.get_json()["data"]["id"]
+    expense_id = created.json()["data"]["id"]
 
     after_create = client.get("/api/dashboard", headers=headers)
-    assert float(after_create.get_json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 900)
+    assert float(after_create.json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 900)
 
     updated = client.put(
         f"/api/expenses/transactions/{expense_id}",
@@ -307,13 +307,14 @@ def test_expense_edit_and_delete_updates_main_account_balance(client):
         headers=headers,
     )
     assert updated.status_code == 200
-    assert float(updated.get_json()["data"]["amount"] or 0) == pytest.approx(250)
+    assert float(updated.json()["data"]["amount"] or 0) == pytest.approx(250)
 
     after_update = client.get("/api/dashboard", headers=headers)
-    assert float(after_update.get_json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 750)
+    assert float(after_update.json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 750)
 
     deleted = client.delete(f"/api/expenses/transactions/{expense_id}", headers=headers)
     assert deleted.status_code == 200
 
     after_delete = client.get("/api/dashboard", headers=headers)
-    assert float(after_delete.get_json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 1000)
+    assert float(after_delete.json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 1000)
+

@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask_compat import Blueprint
 
 from services.common import *
 
@@ -277,7 +277,7 @@ def export_report(report_type):
         return error("Unsupported export format. Use csv or xlsx.")
 
     db.close()
-    from flask import Response
+    from flask_compat import Response
     audit(f"Exported {report_type} report", "Reports")
     if export_format == "xlsx":
         try:
@@ -324,7 +324,7 @@ def export_report(report_type):
         writer.writerow([row.get(h) for h in headers] if isinstance(row, dict) else list(row))
     return Response(
         output.getvalue(),
-        mimetype="text/csv",
+        media_type="text/csv",
         headers={"Content-Disposition": f"attachment;filename={report_type}-report.csv"}
     )
 

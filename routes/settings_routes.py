@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask_compat import Blueprint
 
 from services.common import *
 
@@ -129,3 +129,4 @@ def add_main_account_funds():
 # ══════════════════════════════════════════════════════════════════════════════
 # LOAN CALCULATOR (public — no auth)
 # ══════════════════════════════════════════════════════════════════════════════
+

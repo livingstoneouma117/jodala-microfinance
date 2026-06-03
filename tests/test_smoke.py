@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -111,6 +112,57 @@ def test_admin_can_write_off_overdue_loan(client):
     loan = listing.get_json()["data"]["loans"][0]
     assert loan["status"] == "written_off"
     assert float(loan["outstanding"] or 0) == pytest.approx(0)
+
+
+def test_admin_can_restructure_active_loan_and_log_it(client):
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    before = client.get("/api/loans/L004", headers=headers)
+    assert before.status_code == 200
+    before_payload = before.get_json()["data"]
+    before_loan = before_payload["loan"]
+    before_schedule = before_payload["schedule"]
+    paid_count = before_payload["summary"]["installments_paid"]
+
+    new_term = int(before_loan["term_months"]) + 3
+    new_rate = float(before_loan["annual_rate"] or 0) + 1
+    new_method = "flat" if before_loan["method"] == "reducing" else "reducing"
+    effective_date = date.today().isoformat()
+
+    response = client.post(
+        "/api/loans/L004/restructure",
+        json={
+            "term_months": new_term,
+            "annual_rate": new_rate,
+            "method": new_method,
+            "effective_date": effective_date,
+            "notes": "Extend term for recovery",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.get_json()["data"]
+    assert float(payload["annual_rate"]) == pytest.approx(new_rate)
+    assert int(payload["term_months"]) == new_term
+    assert payload["method"] == new_method
+
+    detail = client.get("/api/loans/L004", headers=headers)
+    assert detail.status_code == 200
+    detail_payload = detail.get_json()["data"]
+    assert detail_payload["loan"]["status"] == "active"
+    assert int(detail_payload["loan"]["term_months"]) == new_term
+    assert float(detail_payload["loan"]["annual_rate"]) == pytest.approx(new_rate)
+    assert len(detail_payload["schedule"]) == paid_count + new_term
+    assert len(before_schedule) > paid_count
+
+    logs = client.get("/api/audit-logs?module=Loans&limit=20", headers=headers)
+    assert logs.status_code == 200
+    audit_rows = logs.get_json()["data"]["logs"]
+    assert any(
+        row["action"] == "Restructured loan L004" and "Status" in (row.get("details") or "")
+        for row in audit_rows
+    )
 
 
 def test_admin_can_assign_roles_and_non_admin_cannot(client):

@@ -691,6 +691,10 @@ def restructure_loan(loan_id):
         if float(summary.get("penalties") or 0) > 0:
             db.close(); return error("Only penalty balance remains. Record a penalty payment instead of restructuring.")
         db.close(); return error("Loan is already fully paid")
+    old_term = int(loan.get("term_months") or 0)
+    old_rate = float(loan.get("annual_rate") or 0)
+    old_method = str(loan.get("method") or "reducing")
+    old_status = str(loan.get("status") or "").lower()
     try:
         term_months = int(d.get("term_months") or loan.get("term_months") or 1)
         annual_rate = float(d.get("annual_rate") if d.get("annual_rate") is not None else loan.get("annual_rate") or 0)
@@ -726,7 +730,16 @@ def restructure_loan(loan_id):
     db.commit()
     updated = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan_id,)).fetchone())
     db.close()
-    audit(f"Restructured loan {loan_id}", "Loans", f"Outstanding KES {outstanding}; paid installments kept: {paid_count}")
+    audit(
+        f"Restructured loan {loan_id}",
+        "Loans",
+        (
+            f"Status {old_status} -> active; term {old_term} -> {term_months} months; "
+            f"rate {old_rate}% -> {annual_rate}%; method {old_method} -> {method}; "
+            f"effective {effective_date}; outstanding KES {outstanding:,.2f}; "
+            f"paid installments kept {paid_count}; new installments {len(new_schedule)}"
+        ),
+    )
     return success(updated, "Loan restructured")
 
 

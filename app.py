@@ -61,6 +61,29 @@ async def index():
     return _serve_index(FRONTEND_DIR)
 
 
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def manifest():
+    return FileResponse(FRONTEND_DIR / "manifest.webmanifest")
+
+
+@app.get("/service-worker.js", include_in_schema=False)
+async def service_worker():
+    return FileResponse(FRONTEND_DIR / "service-worker.js")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(FRONTEND_DIR / "favicon.ico")
+
+
+@app.get("/icons/{path:path}", include_in_schema=False)
+async def icon_asset(path: str):
+    asset = FRONTEND_DIR / "icons" / path
+    if asset.exists():
+        return FileResponse(asset)
+    return Response(status_code=404)
+
+
 @app.get("/v3", include_in_schema=False)
 @app.get("/v3/{path:path}", include_in_schema=False)
 async def index_v3(path: str = ""):

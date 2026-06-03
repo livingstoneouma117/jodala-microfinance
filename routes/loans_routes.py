@@ -156,7 +156,12 @@ def get_loans():
             CASE WHEN l.status='written_off' THEN 0 ELSE COALESCE(risk.overdue_installments,0) END as overdue_installments,
             CASE WHEN l.status='written_off' THEN NULL ELSE risk.oldest_due_date END as oldest_due_date,
             CASE WHEN l.status='written_off' THEN 0 ELSE COALESCE(CAST(julianday(date('now')) - julianday(risk.oldest_due_date) AS INTEGER),0) END as days_in_arrears,
-            CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) END as outstanding
+            CASE
+                WHEN l.status='written_off' THEN 0
+                WHEN l.restructure_snapshot_outstanding IS NOT NULL AND l.restructure_snapshot_paid IS NOT NULL
+                    THEN MAX(l.restructure_snapshot_outstanding - (l.total_paid - COALESCE(l.restructure_snapshot_paid, 0)), 0)
+                ELSE MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0)
+            END as outstanding
             FROM loans l
             JOIN members m ON l.member_id=m.id
             LEFT JOIN users u ON l.officer_id=u.id
@@ -686,7 +691,7 @@ def restructure_loan(loan_id):
     if not schedule:
         db.close(); return error("Loan has no schedule to restructure")
     summary = loan_summary(loan, schedule)
-    outstanding = max(0, float(summary.get("base_repayable") or 0) - float(loan.get("total_paid") or 0))
+    outstanding = max(0, float(summary.get("outstanding") or 0))
     if outstanding <= 0:
         if float(summary.get("penalties") or 0) > 0:
             db.close(); return error("Only penalty balance remains. Record a penalty payment instead of restructuring.")
@@ -708,6 +713,7 @@ def restructure_loan(loan_id):
     if method not in {"reducing", "flat"}:
         db.close(); return error("Method must be reducing or flat")
     effective_date = clean_date(d.get("effective_date"), date.today().isoformat())
+    snapshot_paid = float(loan.get("total_paid") or 0)
     paid_count = db.execute("SELECT COUNT(*) FROM loan_schedule WHERE loan_id=? AND paid=1", (loan_id,)).fetchone()[0]
     db.execute("DELETE FROM loan_schedule WHERE loan_id=? AND paid=0", (loan_id,))
     next_installment = int(db.execute("SELECT COALESCE(MAX(installment),0)+1 FROM loan_schedule WHERE loan_id=?", (loan_id,)).fetchone()[0] or 1)
@@ -723,8 +729,8 @@ def restructure_loan(loan_id):
         note_line += f" {note}"
     combined_notes = "\n".join([item for item in [loan.get("notes"), note_line] if item])
     db.execute(
-        "UPDATE loans SET annual_rate=?, term_months=?, method=?, status='active', notes=? WHERE id=?",
-        (annual_rate, term_months, method, combined_notes, loan_id),
+        "UPDATE loans SET annual_rate=?, term_months=?, method=?, status='active', notes=?, restructure_snapshot_outstanding=?, restructure_snapshot_paid=? WHERE id=?",
+        (annual_rate, term_months, method, combined_notes, outstanding, snapshot_paid, loan_id),
     )
     allocate_repayment_to_schedule(db, loan_id, effective_date)
     db.commit()

@@ -143,6 +143,7 @@ def test_admin_can_restructure_active_loan_and_log_it(client):
     before_loan = before_payload["loan"]
     before_schedule = before_payload["schedule"]
     paid_count = before_payload["summary"]["installments_paid"]
+    before_outstanding = float(before_payload["summary"]["outstanding"] or 0)
 
     new_term = int(before_loan["term_months"]) + 3
     new_rate = float(before_loan["annual_rate"] or 0) + 1
@@ -172,6 +173,7 @@ def test_admin_can_restructure_active_loan_and_log_it(client):
     assert detail_payload["loan"]["status"] == "active"
     assert int(detail_payload["loan"]["term_months"]) == new_term
     assert float(detail_payload["loan"]["annual_rate"]) == pytest.approx(new_rate)
+    assert float(detail_payload["summary"]["outstanding"] or 0) == pytest.approx(before_outstanding)
     assert len(detail_payload["schedule"]) == paid_count + new_term
     assert len(before_schedule) > paid_count
 

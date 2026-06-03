@@ -138,6 +138,8 @@ def init_db():
         written_off_date   TEXT,
         written_off_reason TEXT,
         written_off_by     INTEGER,
+        restructure_snapshot_outstanding REAL,
+        restructure_snapshot_paid REAL,
         created_at      TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (member_id)   REFERENCES members(id),
         FOREIGN KEY (approved_by) REFERENCES users(id),
@@ -596,6 +598,13 @@ def _migrate_schema(c):
         "written_off_by": "ALTER TABLE loans ADD COLUMN written_off_by INTEGER",
     }
     for column, ddl in loan_writeoff_columns.items():
+        if loan_cols and column not in loan_cols:
+            c.execute(ddl)
+    snapshot_columns = {
+        "restructure_snapshot_outstanding": "ALTER TABLE loans ADD COLUMN restructure_snapshot_outstanding REAL",
+        "restructure_snapshot_paid": "ALTER TABLE loans ADD COLUMN restructure_snapshot_paid REAL",
+    }
+    for column, ddl in snapshot_columns.items():
         if loan_cols and column not in loan_cols:
             c.execute(ddl)
 

@@ -482,7 +482,7 @@ def approve_loan(loan_id):
     if loan["status"] != "pending":
         db.close(); return error("Only pending loans can be approved")
 
-    payload = request.get_json(silent=True) or {}
+    payload = request.json or {}
     approved_date = clean_date(payload.get("approved_date"), date.today().isoformat())
     if int(loan["term_months"]) <= 0:
         db.close(); return error("Loan term must be at least 1 month")
@@ -762,4 +762,3 @@ def get_loan_schedule(loan_id):
 # ══════════════════════════════════════════════════════════════════════════════
 # REPAYMENTS
 # ══════════════════════════════════════════════════════════════════════════════
-

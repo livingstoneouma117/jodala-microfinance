@@ -174,6 +174,25 @@ def test_admin_can_write_off_overdue_loan(client):
     assert float(loan["outstanding"] or 0) == pytest.approx(0)
 
 
+def test_admin_can_approve_pending_loan_without_request_body(client):
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    loans = client.get("/api/loans?status=all&limit=100", headers=headers)
+    assert loans.status_code == 200
+    pending = next((row for row in loans.json()["data"]["loans"] if row["status"] == "pending"), None)
+    assert pending is not None
+    loan_id = pending["id"]
+
+    approved = client.post(f"/api/loans/{loan_id}/approve", headers=headers)
+    assert approved.status_code == 200
+    assert approved.json()["success"] is True
+
+    detail = client.get(f"/api/loans/{loan_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["data"]["loan"]["status"] == "approved"
+
+
 def test_admin_can_restructure_active_loan_and_log_it(client):
     token = _login(client)
     headers = {"Authorization": f"Bearer {token}"}

@@ -271,7 +271,7 @@ def loan_statement(loan_id):
     <div class='right'><strong>A5 Loan Statement</strong><div>{date.today().isoformat()}</div><div>{escape(loan_id)}</div></div></div>
     <div class='grid'>
     <div class='box'><strong>{'External Borrower' if loan.get('member_type') == 'borrower' else 'Member'}</strong><br>{escape(loan['member_name'])}<br>{escape(loan.get('member_phone') or '')}<br>{escape(loan.get('member_address') or '')}</div>
-    <div class='box'><strong>Loan Summary</strong><br>Principal: KES {loan['amount']:,.2f}<br>Rate: {loan['annual_rate']}% p.a.<br>Term: {loan['term_months']} months<br>Penalties: KES {summary['penalties']:,.2f}<br>Status: {escape(loan['status'])}</div>
+    <div class='box'><strong>Loan Summary</strong><br>Principal: KES {loan['amount']:,.2f}<br>Rate: {loan['annual_rate']}% p.m.<br>Term: {loan['term_months']} months<br>Penalties: KES {summary['penalties']:,.2f}<br>Status: {escape(loan['status'])}</div>
     <div class='box'>Total Repayable<br><strong>KES {summary['total_repayable']:,.2f}</strong></div>
     <div class='box'>Outstanding<br><strong>KES {summary['outstanding']:,.2f}</strong></div>
     </div>

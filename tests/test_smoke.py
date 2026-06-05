@@ -7,6 +7,7 @@ from io import BytesIO
 
 import pytest
 from openpyxl import load_workbook
+from calculator import build_schedule
 from fastapi.testclient import TestClient
 
 
@@ -52,6 +53,18 @@ def test_login_success_and_failure(client):
     assert failed.status_code == 401
     assert failed.json()["success"] is False
 
+
+
+def test_loan_schedule_math_matches_method_and_zero_rate():
+    flat = build_schedule("L1", 2500, 18, 12, "flat", "2026-05-24")
+    reducing = build_schedule("L2", 2500, 18, 12, "reducing", "2026-05-24")
+    zero_rate = build_schedule("L3", 2500, 0, 12, "reducing", "2026-05-24")
+
+    assert flat[0]["interest"] == pytest.approx(flat[1]["interest"], abs=0.01)
+    assert reducing[0]["interest"] > reducing[-1]["interest"]
+    assert sum(row["repayment"] for row in flat) > sum(row["repayment"] for row in reducing)
+    assert sum(row["repayment"] for row in zero_rate) == pytest.approx(2500, abs=0.01)
+    assert all(row["interest"] == pytest.approx(0, abs=0.01) for row in zero_rate)
 
 def test_password_hashes_are_bcrypt_and_login_rate_limit_persists(client, tmp_path, monkeypatch):
     db_path = tmp_path / "sacco-test.db"

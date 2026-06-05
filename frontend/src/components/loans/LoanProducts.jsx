@@ -157,7 +157,7 @@ function LoanProducts({ user }) {
             <label>Max Term<input type="number" min="1" value={form.max_term} onChange={(event) => setForm((prev) => ({ ...prev, max_term: event.target.value }))} required /></label>
           </div>
           <div className="two-col">
-            <label>Annual Rate %<input type="number" min="0" step="0.01" value={form.annual_rate} onChange={(event) => setForm((prev) => ({ ...prev, annual_rate: event.target.value }))} /></label>
+            <label>Monthly Rate %<input type="number" min="0" step="0.01" value={form.annual_rate} onChange={(event) => setForm((prev) => ({ ...prev, annual_rate: event.target.value }))} /></label>
             <label>Penalty Rate %<input type="number" min="0" step="0.01" value={form.penalty_rate} onChange={(event) => setForm((prev) => ({ ...prev, penalty_rate: event.target.value }))} /></label>
           </div>
           <div className="two-col">

@@ -213,7 +213,7 @@ function LoanDetails({ loanId, onChanged, user }) {
           <form className="stack" onSubmit={restructureLoan}>
             <div className="two-col">
               <label>New Term (months)<input type="number" min="1" value={restructureForm.term_months} onChange={(event) => setRestructureForm((prev) => ({ ...prev, term_months: event.target.value }))} required /></label>
-              <label>New Annual Rate %<input type="number" min="0" step="0.01" value={restructureForm.annual_rate} onChange={(event) => setRestructureForm((prev) => ({ ...prev, annual_rate: event.target.value }))} /></label>
+              <label>New Monthly Rate %<input type="number" min="0" step="0.01" value={restructureForm.annual_rate} onChange={(event) => setRestructureForm((prev) => ({ ...prev, annual_rate: event.target.value }))} /></label>
             </div>
             <div className="two-col">
               <label>Method<select value={restructureForm.method} onChange={(event) => setRestructureForm((prev) => ({ ...prev, method: event.target.value }))}><option value="reducing">Reducing Balance</option><option value="flat">Flat Rate</option></select></label>

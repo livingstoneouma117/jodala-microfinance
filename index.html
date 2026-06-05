@@ -2119,7 +2119,7 @@ async function viewLoan(id){
         <button class="btn btn-primary btn-sm" onclick="shareLoanStatementWhatsApp('${id}')">Share WhatsApp</button>
       </div>
       <div class="grid3 gap3 mb4">
-        ${[['Principal',`KES ${fmt(l.amount,0)}`],['Interest Rate',`${l.annual_rate}% p.a.`],
+        ${[['Principal',`KES ${fmt(l.amount,0)}`],['Monthly Rate',`${l.annual_rate}% p.m.`],
           ['Method',l.method==='flat'?'Flat Rate':'Reducing Balance'],['Term',`${l.term_months} months`],
           ['Approved',fmtSafeD(l.approved_date)],['Disbursed',fmtSafeD(l.disbursed_date)],['Status',badge(l.status)],
           ...(l.status==='written_off' ? [['Written Off',`KES ${fmt(l.written_off_amount||0,0)} on ${fmtSafeD(l.written_off_date)}`]] : [])

@@ -15,6 +15,7 @@ def _add_months(dt: date, months: int) -> date:
     return date(year, month, day)
 
 
+
 def build_schedule(loan_id: str, principal: float, annual_rate: float,
                    term_months: int, method: str, start_date: str) -> list[dict]:
     """
@@ -26,33 +27,47 @@ def build_schedule(loan_id: str, principal: float, annual_rate: float,
     if term_months <= 0:
         return schedule
 
-    balance  = float(principal)
-    monthly_rate = float(annual_rate) / 100
-
-    # Keep legacy flat-interest behavior, but guarantee exact totals/rounding.
-    monthly_interest = principal * monthly_rate if monthly_rate > 0 else 0.0
-    total_interest = monthly_interest * term_months
-    total_repayable = principal + total_interest
-
+    principal = float(principal)
+    rate = float(annual_rate) / 100.0
+    balance = round(principal, 2)
     principal_base = round(principal / term_months, 2)
-    interest_base = round(total_interest / term_months, 2) if total_interest > 0 else 0.0
+
+    # The app stores and displays loan rates as monthly percentages.
+    # Flat rate keeps the interest constant on the original principal.
+    # Reducing balance charges interest on the declining outstanding balance.
+    if method == "reducing":
+        if rate > 0:
+            payment_target = principal * rate / (1 - (1 + rate) ** (-term_months))
+        else:
+            payment_target = principal / term_months
+    else:
+        payment_target = (principal / term_months) + (principal * rate)
+
     principal_alloc = 0.0
     interest_alloc = 0.0
 
     for i in range(1, term_months + 1):
         due_date = _add_months(start, i)
 
-        if i < term_months:
-            principal_pay = principal_base
-            interest = interest_base
+        if method == "reducing":
+            interest = round(balance * rate, 2) if rate > 0 else 0.0
+            if i < term_months:
+                principal_pay = round(payment_target - interest, 2)
+                principal_pay = max(0.0, min(round(balance, 2), principal_pay))
+            else:
+                principal_pay = round(balance, 2)
+            repayment = round(principal_pay + interest, 2)
         else:
-            # Last installment absorbs rounding remainder so totals stay exact.
-            principal_pay = round(principal - principal_alloc, 2)
-            interest = round(total_interest - interest_alloc, 2)
+            if i < term_months:
+                principal_pay = principal_base
+                interest = round(principal * rate, 2)
+            else:
+                principal_pay = round(principal - principal_alloc, 2)
+                interest = round((principal * rate * term_months) - interest_alloc, 2)
+            repayment = round(principal_pay + interest, 2)
 
         principal_alloc += principal_pay
         interest_alloc += interest
-        repayment = round(principal_pay + interest, 2)
         balance = round(max(0.0, principal - principal_alloc), 2)
 
         schedule.append({
@@ -66,7 +81,6 @@ def build_schedule(loan_id: str, principal: float, annual_rate: float,
         })
 
     return schedule
-
 
 def calculate_penalty(schedule_row: dict, penalty_rate_pct: float = 5.0) -> float:
     """

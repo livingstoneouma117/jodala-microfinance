@@ -702,14 +702,11 @@ def restructure_loan(loan_id):
     old_status = str(loan.get("status") or "").lower()
     try:
         term_months = int(d.get("term_months") or loan.get("term_months") or 1)
-        annual_rate = float(d.get("annual_rate") if d.get("annual_rate") is not None else loan.get("annual_rate") or 0)
         method = (d.get("method") or loan.get("method") or "reducing").strip().lower()
     except (TypeError, ValueError):
         db.close(); return error("Term and rate must be valid numbers")
     if term_months <= 0:
         db.close(); return error("Term must be at least 1 month")
-    if annual_rate < 0:
-        db.close(); return error("Rate cannot be negative")
     if method not in {"reducing", "flat"}:
         db.close(); return error("Method must be reducing or flat")
     effective_date = clean_date(d.get("effective_date"), date.today().isoformat())
@@ -717,20 +714,21 @@ def restructure_loan(loan_id):
     paid_count = db.execute("SELECT COUNT(*) FROM loan_schedule WHERE loan_id=? AND paid=1", (loan_id,)).fetchone()[0]
     db.execute("DELETE FROM loan_schedule WHERE loan_id=? AND paid=0", (loan_id,))
     next_installment = int(db.execute("SELECT COALESCE(MAX(installment),0)+1 FROM loan_schedule WHERE loan_id=?", (loan_id,)).fetchone()[0] or 1)
-    new_schedule = build_schedule(loan_id, outstanding, annual_rate, term_months, method, effective_date)
+    restructured_rate = 0.0
+    new_schedule = build_schedule(loan_id, outstanding, restructured_rate, term_months, method, effective_date)
     for idx, row in enumerate(new_schedule, start=next_installment):
         db.execute(
             "INSERT INTO loan_schedule (loan_id,installment,due_date,principal,interest,repayment,balance) VALUES (?,?,?,?,?,?,?)",
             (loan_id, idx, row["due_date"], row["principal"], row["interest"], row["repayment"], row["balance"]),
         )
     note = (d.get("notes") or "").strip()
-    note_line = f"Restructured on {effective_date}: term {term_months} months, rate {annual_rate}%, method {method}."
+    note_line = f"Restructured on {effective_date}: term {term_months} months, rate 0.0%, method {method}. Interest was waived after restructure."
     if note:
         note_line += f" {note}"
     combined_notes = "\n".join([item for item in [loan.get("notes"), note_line] if item])
     db.execute(
         "UPDATE loans SET annual_rate=?, term_months=?, method=?, status='active', notes=?, restructure_snapshot_outstanding=?, restructure_snapshot_paid=? WHERE id=?",
-        (annual_rate, term_months, method, combined_notes, outstanding, snapshot_paid, loan_id),
+        (restructured_rate, term_months, method, combined_notes, outstanding, snapshot_paid, loan_id),
     )
     allocate_repayment_to_schedule(db, loan_id, effective_date)
     db.commit()
@@ -741,7 +739,7 @@ def restructure_loan(loan_id):
         "Loans",
         (
             f"Status {old_status} -> active; term {old_term} -> {term_months} months; "
-            f"rate {old_rate}% -> {annual_rate}%; method {old_method} -> {method}; "
+            f"rate {old_rate}% -> 0.0%; method {old_method} -> {method}; "
             f"effective {effective_date}; outstanding KES {outstanding:,.2f}; "
             f"paid installments kept {paid_count}; new installments {len(new_schedule)}"
         ),
@@ -764,5 +762,4 @@ def get_loan_schedule(loan_id):
 # ══════════════════════════════════════════════════════════════════════════════
 # REPAYMENTS
 # ══════════════════════════════════════════════════════════════════════════════
-
 

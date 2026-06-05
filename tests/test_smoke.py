@@ -204,7 +204,7 @@ def test_admin_can_restructure_active_loan_and_log_it(client):
     )
     assert response.status_code == 200
     payload = response.json()["data"]
-    assert float(payload["annual_rate"]) == pytest.approx(new_rate)
+    assert float(payload["annual_rate"]) == pytest.approx(0)
     assert int(payload["term_months"]) == new_term
     assert payload["method"] == new_method
 
@@ -213,10 +213,11 @@ def test_admin_can_restructure_active_loan_and_log_it(client):
     detail_payload = detail.json()["data"]
     assert detail_payload["loan"]["status"] == "active"
     assert int(detail_payload["loan"]["term_months"]) == new_term
-    assert float(detail_payload["loan"]["annual_rate"]) == pytest.approx(new_rate)
+    assert float(detail_payload["loan"]["annual_rate"]) == pytest.approx(0)
     assert float(detail_payload["summary"]["outstanding"] or 0) == pytest.approx(before_outstanding)
     assert len(detail_payload["schedule"]) == paid_count + new_term
     assert len(before_schedule) > paid_count
+    assert all(float(row.get("interest") or 0) == pytest.approx(0, abs=0.01) for row in detail_payload["schedule"][paid_count:])
 
     logs = client.get("/api/audit-logs?module=Loans&limit=20", headers=headers)
     assert logs.status_code == 200
@@ -358,4 +359,3 @@ def test_expense_edit_and_delete_updates_main_account_balance(client):
 
     after_delete = client.get("/api/dashboard", headers=headers)
     assert float(after_delete.json()["data"]["stats"]["account_current_balance"] or 0) == pytest.approx(starting_balance + 1000)
-

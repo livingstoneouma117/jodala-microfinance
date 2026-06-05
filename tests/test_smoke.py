@@ -3,8 +3,10 @@ import sqlite3
 import sys
 from datetime import date
 from pathlib import Path
+from io import BytesIO
 
 import pytest
+from openpyxl import load_workbook
 from fastapi.testclient import TestClient
 
 
@@ -78,6 +80,32 @@ def test_report_export_requires_auth_and_returns_csv(client):
     assert response.status_code == 200
     assert response.headers.get('content-type').split(';')[0] == "text/csv"
     assert b"ID,Name" in response.content
+
+
+def test_report_export_xlsx_contains_summary_data_and_analytics(client):
+    token = _login(client)
+    response = client.get(
+        "/api/reports/export/loans?format=xlsx",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("content-type").split(";")[0] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    wb = load_workbook(BytesIO(response.content))
+    assert wb.sheetnames[:3] == ["Summary", "Data", "Analytics"]
+
+    summary = wb["Summary"]
+    assert summary["A1"].value == "Loans Report"
+    assert summary["B4"].value > 0
+
+    data = wb["Data"]
+    assert data["A1"].value == "ID"
+    assert data["B1"].value == "Member"
+    assert data.max_row > 1
+
+    analytics = wb["Analytics"]
+    assert analytics.max_row > 3
+    assert len(analytics._charts) > 0
 
 
 def test_overdue_penalties_are_applied_to_outstanding(client):

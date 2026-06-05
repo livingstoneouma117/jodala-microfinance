@@ -1,9 +1,291 @@
+from collections import Counter, defaultdict
+from datetime import datetime
+from io import BytesIO
+
+from openpyxl import Workbook
+from openpyxl.chart import BarChart, LineChart, PieChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.styles import Alignment, Font, PatternFill
+
 from api import Blueprint
 
 from services.common import *
 
 reports_bp = Blueprint("reports", __name__)
 bp = reports_bp
+
+
+def _xlsx_style_header(ws, row=1):
+    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for cell in ws[row]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+
+def _xlsx_autosize(ws):
+    for col in ws.columns:
+        cells = list(col)
+        if not cells:
+            continue
+        max_len = max((len(str(c.value or "")) for c in cells), default=10)
+        ws.column_dimensions[cells[0].column_letter].width = min(42, max(12, max_len + 2))
+
+
+def _xlsx_cell_value(row, header):
+    if not isinstance(row, dict):
+        return row
+    variants = [
+        header,
+        header.lower(),
+        header.upper(),
+        header.replace(" ", "_"),
+        header.replace(" ", "_").lower(),
+        header.replace(" ", "_").title(),
+    ]
+    for key in variants:
+        if key in row and row[key] is not None:
+            return row[key]
+    return None
+
+def _xlsx_write_rows(ws, headers, rows):
+    ws.append(headers)
+    for row in rows:
+        if isinstance(row, dict):
+            ws.append([_xlsx_cell_value(row, h) for h in headers])
+        else:
+            ws.append(list(row))
+    _xlsx_style_header(ws)
+    _xlsx_autosize(ws)
+
+
+def _xlsx_summary_sheet(wb, report_type: str, headers: list[str], rows: list[dict], metrics: dict) -> None:
+    ws = wb.create_sheet("Summary")
+    ws["A1"] = f"{report_type.replace('-', ' ').title()} Report"
+    ws["A1"].font = Font(bold=True, size=16)
+    ws["A3"] = "Generated At"
+    ws["B3"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ws["A4"] = "Record Count"
+    ws["B4"] = len(rows)
+    ws["A6"] = "Key Metrics"
+    ws["A6"].font = Font(bold=True, size=12)
+    ws["A7"] = "Metric"
+    ws["B7"] = "Value"
+    for idx, (key, value) in enumerate(metrics.items(), start=8):
+        ws[f"A{idx}"] = key
+        ws[f"B{idx}"] = value
+    _xlsx_style_header(ws, 7)
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 20
+
+
+def _xlsx_analytics_sheet(wb, report_type: str, rows: list[dict]) -> None:
+    ws = wb.create_sheet("Analytics")
+    ws["A1"] = "Analytics"
+    ws["A1"].font = Font(bold=True, size=14)
+
+    if not rows:
+        ws["A3"] = "No records available for analytics."
+        return
+
+    if report_type == "loans":
+        status_counts = Counter(str(row.get("Status") or row.get("status") or "").title() or "Unknown" for row in rows)
+        ws["A3"] = "Loan Status"
+        ws["B3"] = "Count"
+        for idx, (status, count) in enumerate(status_counts.items(), start=4):
+            ws[f"A{idx}"] = status
+            ws[f"B{idx}"] = count
+        _xlsx_style_header(ws, 3)
+        pie = PieChart()
+        pie.title = "Loan Status Breakdown"
+        data = Reference(ws, min_col=2, min_row=3, max_row=3 + len(status_counts))
+        labels = Reference(ws, min_col=1, min_row=4, max_row=3 + len(status_counts))
+        pie.add_data(data, titles_from_data=True)
+        pie.set_categories(labels)
+        pie.height = 7
+        pie.width = 9
+        pie.dataLabels = DataLabelList()
+        pie.dataLabels.showPercent = True
+        ws.add_chart(pie, "D3")
+
+        top = sorted(rows, key=lambda row: float(row.get("Outstanding") or row.get("outstanding") or 0), reverse=True)[:10]
+        start = 20
+        ws[f"A{start}"] = "Top Outstanding Loans"
+        ws[f"B{start}"] = "Outstanding"
+        for idx, row in enumerate(top, start=start + 1):
+            ws[f"A{idx}"] = row.get("ID") or row.get("id")
+            ws[f"B{idx}"] = float(row.get("Outstanding") or row.get("outstanding") or 0)
+        _xlsx_style_header(ws, start)
+        bar = BarChart()
+        bar.type = "bar"
+        bar.style = 10
+        bar.title = "Top Outstanding Loans"
+        bar.y_axis.title = "Loan"
+        bar.x_axis.title = "KES"
+        data = Reference(ws, min_col=2, min_row=start, max_row=start + len(top))
+        cats = Reference(ws, min_col=1, min_row=start + 1, max_row=start + len(top))
+        bar.add_data(data, titles_from_data=True)
+        bar.set_categories(cats)
+        bar.height = 7
+        bar.width = 13
+        ws.add_chart(bar, "D20")
+
+    elif report_type == "account-monthly":
+        ws["A3"] = "Month"
+        ws["B3"] = "Opening"
+        ws["C3"] = "Inflow"
+        ws["D3"] = "Outflow"
+        ws["E3"] = "Closing"
+        for idx, row in enumerate(rows, start=4):
+            ws[f"A{idx}"] = row.get("Month") or row.get("month")
+            ws[f"B{idx}"] = float(row.get("Opening Balance") or row.get("opening_balance") or 0)
+            ws[f"C{idx}"] = float(row.get("Total Inflow") or row.get("inflow") or 0)
+            ws[f"D{idx}"] = float(row.get("Total Outflow") or row.get("outflow") or 0)
+            ws[f"E{idx}"] = float(row.get("Closing Balance") or row.get("closing_balance") or 0)
+        _xlsx_style_header(ws, 3)
+        line = LineChart()
+        line.title = "Monthly Cashflow"
+        line.y_axis.title = "KES"
+        line.x_axis.title = "Month"
+        data = Reference(ws, min_col=2, max_col=5, min_row=3, max_row=3 + len(rows))
+        cats = Reference(ws, min_col=1, min_row=4, max_row=3 + len(rows))
+        line.add_data(data, titles_from_data=True)
+        line.set_categories(cats)
+        line.height = 7
+        line.width = 14
+        ws.add_chart(line, "G3")
+
+    elif report_type == "savings":
+        balances = sorted(rows, key=lambda row: float(row.get("Balance") or row.get("balance") or 0), reverse=True)[:10]
+        ws["A3"] = "Top Savers"
+        ws["B3"] = "Balance"
+        for idx, row in enumerate(balances, start=4):
+            ws[f"A{idx}"] = row.get("Name") or row.get("name")
+            ws[f"B{idx}"] = float(row.get("Balance") or row.get("balance") or 0)
+        _xlsx_style_header(ws, 3)
+        bar = BarChart()
+        bar.type = "bar"
+        bar.title = "Top Savers"
+        bar.y_axis.title = "Member"
+        bar.x_axis.title = "KES"
+        data = Reference(ws, min_col=2, min_row=3, max_row=3 + len(balances))
+        cats = Reference(ws, min_col=1, min_row=4, max_row=3 + len(balances))
+        bar.add_data(data, titles_from_data=True)
+        bar.set_categories(cats)
+        bar.height = 7
+        bar.width = 13
+        ws.add_chart(bar, "D3")
+
+    elif report_type == "expenses":
+        grouped = defaultdict(float)
+        for row in rows:
+            grouped[str(row.get("Account") or row.get("account") or "Unknown")] += float(row.get("Amount") or row.get("amount") or 0)
+        ws["A3"] = "Account"
+        ws["B3"] = "Total Expense"
+        for idx, (name, amount) in enumerate(sorted(grouped.items(), key=lambda item: item[1], reverse=True), start=4):
+            ws[f"A{idx}"] = name
+            ws[f"B{idx}"] = amount
+        _xlsx_style_header(ws, 3)
+        bar = BarChart()
+        bar.type = "bar"
+        bar.title = "Expense by Account"
+        bar.x_axis.title = "KES"
+        data = Reference(ws, min_col=2, min_row=3, max_row=3 + len(grouped))
+        cats = Reference(ws, min_col=1, min_row=4, max_row=3 + len(grouped))
+        bar.add_data(data, titles_from_data=True)
+        bar.set_categories(cats)
+        bar.height = 7
+        bar.width = 13
+        ws.add_chart(bar, "D3")
+
+    elif report_type == "repayments":
+        monthly = defaultdict(float)
+        for row in rows:
+            payment_date = str(row.get("Date") or row.get("payment_date") or "")[:7]
+            if payment_date:
+                monthly[payment_date] += float(row.get("Amount") or row.get("amount") or 0)
+        ws["A3"] = "Month"
+        ws["B3"] = "Repayments"
+        for idx, (month, amount) in enumerate(sorted(monthly.items()), start=4):
+            ws[f"A{idx}"] = month
+            ws[f"B{idx}"] = amount
+        _xlsx_style_header(ws, 3)
+        line = LineChart()
+        line.title = "Monthly Repayments"
+        line.x_axis.title = "Month"
+        line.y_axis.title = "KES"
+        data = Reference(ws, min_col=2, min_row=3, max_row=3 + len(monthly))
+        cats = Reference(ws, min_col=1, min_row=4, max_row=3 + len(monthly))
+        line.add_data(data, titles_from_data=True)
+        line.set_categories(cats)
+        line.height = 7
+        line.width = 14
+        ws.add_chart(line, "D3")
+
+    elif report_type == "dividends":
+        ranked = sorted(rows, key=lambda row: float(row.get("Dividend Amount") or row.get("dividend_amount") or 0), reverse=True)[:10]
+        ws["A3"] = "Member"
+        ws["B3"] = "Dividend"
+        for idx, row in enumerate(ranked, start=4):
+            ws[f"A{idx}"] = row.get("Member") or row.get("member")
+            ws[f"B{idx}"] = float(row.get("Dividend Amount") or row.get("dividend_amount") or 0)
+        _xlsx_style_header(ws, 3)
+        bar = BarChart()
+        bar.type = "bar"
+        bar.title = "Top Dividend Allocations"
+        data = Reference(ws, min_col=2, min_row=3, max_row=3 + len(ranked))
+        cats = Reference(ws, min_col=1, min_row=4, max_row=3 + len(ranked))
+        bar.add_data(data, titles_from_data=True)
+        bar.set_categories(cats)
+        bar.height = 7
+        bar.width = 13
+        ws.add_chart(bar, "D3")
+
+    else:
+        ws["A3"] = "Analytics"
+        ws["A4"] = "No report-specific analytics available."
+
+
+def _xlsx_metrics(report_type: str, rows: list[dict], totals: dict | None = None) -> dict:
+    totals = totals or {}
+    if report_type == "loans":
+        return {
+            "Total Loans": len(rows),
+            "Total Disbursed": round(sum(float(row.get("Amount") or row.get("amount") or 0) for row in rows), 2),
+            "Total Repaid": round(sum(float(row.get("Paid") or row.get("total_paid") or 0) for row in rows), 2),
+            "Total Outstanding": round(sum(float(row.get("Outstanding") or row.get("outstanding") or 0) for row in rows), 2),
+            "Total Penalties": round(sum(float(row.get("Penalties") or row.get("penalties") or 0) for row in rows), 2),
+        }
+    if report_type == "account-monthly":
+        last = rows[-1] if rows else {}
+        return {
+            "Months": len(rows),
+            "Closing Balance": round(float(last.get("Closing Balance") or last.get("closing_balance") or 0), 2) if last else 0,
+            "Total Inflow": round(sum(float(row.get("Total Inflow") or row.get("inflow") or 0) for row in rows), 2),
+            "Total Outflow": round(sum(float(row.get("Total Outflow") or row.get("outflow") or 0) for row in rows), 2),
+        }
+    if report_type == "savings":
+        return {
+            "Members": len(rows),
+            "Total Savings": round(sum(float(row.get("Balance") or row.get("balance") or 0) for row in rows), 2),
+        }
+    if report_type == "repayments":
+        return {
+            "Repayments": len(rows),
+            "Total Repaid": round(sum(float(row.get("Amount") or row.get("amount") or 0) for row in rows), 2),
+        }
+    if report_type == "expenses":
+        return {
+            "Transactions": len(rows),
+            "Total Expenses": round(sum(float(row.get("Amount") or row.get("amount") or 0) for row in rows), 2),
+        }
+    if report_type == "dividends":
+        return {
+            "Allocations": len(rows),
+            "Total Dividend": round(sum(float(row.get("Dividend Amount") or row.get("dividend_amount") or 0) for row in rows), 2),
+        }
+    return {"Rows": len(rows)}
 
 @bp.route("/api/reports/portfolio", methods=["GET"])
 @login_required
@@ -282,30 +564,22 @@ def export_report(report_type):
     if export_format == "xlsx":
         try:
             from openpyxl import Workbook
-            from openpyxl.styles import Font, PatternFill
         except Exception:
             return error("Excel export dependency missing. Install openpyxl.")
 
         wb = Workbook()
-        ws = wb.active
-        ws.title = (report_type or "report")[:31]
-        ws.append(headers)
-        header_fill = PatternFill(start_color="E5EEF9", end_color="E5EEF9", fill_type="solid")
-        for idx in range(1, len(headers) + 1):
-            cell = ws.cell(row=1, column=idx)
-            cell.font = Font(bold=True)
-            cell.fill = header_fill
-
+        wb.remove(wb.active)
+        data_rows = []
         for row in rows:
             if isinstance(row, dict):
-                ws.append([row.get(h) for h in headers])
+                data_rows.append(row)
             else:
-                ws.append(list(row))
-
-        # Set readable default widths.
-        for col in ws.columns:
-            max_len = max((len(str(c.value or "")) for c in col), default=10)
-            ws.column_dimensions[col[0].column_letter].width = min(42, max(12, max_len + 2))
+                data_rows.append(dict(zip(headers, row)))
+        metrics = _xlsx_metrics(report_type, data_rows)
+        _xlsx_summary_sheet(wb, report_type, headers, data_rows, metrics)
+        data_ws = wb.create_sheet("Data")
+        _xlsx_write_rows(data_ws, headers, data_rows)
+        _xlsx_analytics_sheet(wb, report_type, data_rows)
 
         stream = BytesIO()
         wb.save(stream)

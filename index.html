@@ -1191,6 +1191,7 @@ let loanEditId = '';
 let loanEditStatus = '';
 let pendingLoanApplications = [];
 let expenseAccounts = [];
+let expenseEditId = null;
 let globalSearchResults = [];
 let sessionTimer = null;
 let sessionTimeoutListening = false;
@@ -2554,7 +2555,7 @@ async function loadExpenses(){
         <td class="text-muted text-xs">${t.recorded_by_name||'—'}</td>
         <td>
           <div class="td-actions">
-            ${canManage?`<button class="btn-icon" style="color:var(--red)" title="Delete Expense" onclick="deleteExpense('${t.id}')">Delete</button>`:'—'}
+            ${canManage?`<button class="btn-icon" style="color:var(--accent2)" title="Edit Expense" onclick="editExpense(${JSON.stringify(t).replace(/\"/g,'&quot;')})">Edit</button><button class="btn-icon" style="color:var(--red)" title="Delete Expense" onclick="deleteExpense('${t.id}')">Delete</button>`:'—'}
           </div>
         </td>
       </tr>
@@ -2566,16 +2567,42 @@ async function loadExpenses(){
 
 async function openExpenseModal(){
   if(!canManageExpenses()){toast('Insufficient permissions','error');return}
+  expenseEditId = null;
   if(!expenseAccounts.length){
     const res=await api('/expenses/accounts?include_inactive=true');
     if(res?.success)expenseAccounts=res.data||[];
   }
   renderExpenseAccountSelectors(expenseAccounts);
+  const title=document.querySelector('#expense-modal .modal-title');
+  if(title) title.textContent='Record Expense';
+  const submitBtn=document.querySelector('#expense-modal .modal-footer .btn-primary');
+  if(submitBtn) submitBtn.textContent='Record Expense';
   document.getElementById('ex-amount').value='';
   document.getElementById('ex-date').value=today();
   document.getElementById('ex-payee').value='';
   document.getElementById('ex-ref').value='';
   document.getElementById('ex-notes').value='';
+  openModal('expense-modal');
+}
+
+async function editExpense(t){
+  if(!canManageExpenses()){toast('Insufficient permissions','error');return}
+  expenseEditId = t.id;
+  if(!expenseAccounts.length){
+    const res=await api('/expenses/accounts?include_inactive=true');
+    if(res?.success)expenseAccounts=res.data||[];
+  }
+  renderExpenseAccountSelectors(expenseAccounts);
+  const title=document.querySelector('#expense-modal .modal-title');
+  if(title) title.textContent='Edit Expense';
+  const submitBtn=document.querySelector('#expense-modal .modal-footer .btn-primary');
+  if(submitBtn) submitBtn.textContent='Save Changes';
+  document.getElementById('ex-account').value=t.account_id||'';
+  document.getElementById('ex-amount').value=t.amount||'';
+  document.getElementById('ex-date').value=t.expense_date||today();
+  document.getElementById('ex-payee').value=t.payee||'';
+  document.getElementById('ex-ref').value=t.reference||'';
+  document.getElementById('ex-notes').value=t.notes||'';
   openModal('expense-modal');
 }
 
@@ -2591,10 +2618,13 @@ async function submitExpense(){
   };
   if(!data.account_id||!data.amount){toast('Account and amount are required','error');return}
   try{
-    const res=await api('/expenses/transactions',{method:'POST',body:JSON.stringify(data)});
+    const method=expenseEditId?'PUT':'POST';
+    const url=expenseEditId?`/expenses/transactions/${expenseEditId}`:'/expenses/transactions';
+    const res=await api(url,{method,body:JSON.stringify(data)});
     if(res?.success){
-      toast(res.message||'Expense recorded');
+      toast(res.message|| (expenseEditId ? 'Expense updated' : 'Expense recorded'));
       closeModal('expense-modal');
+      expenseEditId = null;
       expensesPage=1;
       loadExpenses();
       loadDashboard();

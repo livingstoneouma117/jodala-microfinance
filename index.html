@@ -1554,24 +1554,24 @@ async function loadDashboard(){
   try{
     const [res, portfolio] = await Promise.all([api('/dashboard'), api('/reports/portfolio')]);
     if(!res?.success)return;
-    const {stats,monthly_repayments,recent_loans,loan_breakdown,top_borrowers}=res.data;
-    renderDashStats(stats);
+    const {stats,monthly_repayments,recent_loans,loan_breakdown,top_borrowers,monthly_summary}=res.data;
+    renderDashStats(stats, monthly_summary || {});
     renderDashCharts(stats,monthly_repayments,loan_breakdown);
     if(portfolio?.success)renderDashLoanReport(portfolio.data);
     renderDashBottom(recent_loans,top_borrowers);
   }catch(e){toast(e.message,'error')}
 }
 
-function renderDashStats(s){
+function renderDashStats(s, monthly={}){
   const cards=[
     {
       label:'Main Account Balance',
-      value:`KES ${fmt(s.account_current_balance||0,0)}`,
-      sub:`Opening/Current KES ${fmt(s.account_opening_balance||0,0)} · Lifetime Inflow KES ${fmt(s.account_total_inflow||0,0)} · Lifetime Outflow KES ${fmt(s.account_total_outflow||0,0)}`,
+      value:`KES ${fmt((monthly.closing_balance ?? s.account_current_balance) || 0,0)}`,
+      sub:`Opening/Current KES ${fmt((monthly.opening_balance ?? s.account_opening_balance) || 0,0)} · Monthly Inflow KES ${fmt(monthly.inflow || 0,0)} · Monthly Outflow KES ${fmt(monthly.outflow || 0,0)}`,
       icon:'🏧',
       cls:'stat-cyan'
     },
-    {label:'Portfolio Outstanding',value:`KES ${fmt(s.outstanding_portfolio,0)}`,sub:`KES ${fmt(s.total_disbursed,0)} disbursed`,icon:'💰',cls:'stat-green'},
+    {label:'Portfolio Outstanding',value:`KES ${fmt(s.monthly_outstanding_portfolio ?? s.outstanding_portfolio,0)}`,sub:`KES ${fmt(monthly.loan_disbursed || s.account_loan_disbursed || 0,0)} disbursed this month`,icon:'💰',cls:'stat-green'},
     {label:'Portfolio at Risk',value:`${fmt(s.portfolio_at_risk,1)}%`,sub:`KES ${fmt(s.amount_in_arrears,0)} in arrears`,icon:'⚠️',cls:'stat-red'},
     {label:'Loans in Pipeline',value:(s.pending_loans||0)+(s.approved_loans||0),sub:`${s.pending_loans||0} pending · ${s.approved_loans||0} approved`,icon:'📋',cls:'stat-blue'},
     {label:'Due Today',value:`KES ${fmt(s.due_today,0)}`,sub:`${s.active_loans||0} active loans`,icon:'🏦',cls:'stat-amber'},

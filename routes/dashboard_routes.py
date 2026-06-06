@@ -34,6 +34,7 @@ def dashboard():
     account_current_balance = account_opening_balance
     monthly_rows = account_report.get("months") or []
     current_month = monthly_rows[-1] if monthly_rows else {}
+    report_month = date.today().strftime("%Y-%m")
     portfolio = db.execute("""
         SELECT
           COALESCE(SUM(total_repayable),0) AS total_repayable,
@@ -58,6 +59,31 @@ def dashboard():
           WHERE l.disbursed_date IS NOT NULL AND l.status IN ('active','overdue','completed')
         )
     """).fetchone()
+    monthly_portfolio = db.execute("""
+        SELECT
+          COALESCE(SUM(total_repayable),0) AS total_repayable,
+          COALESCE(SUM(outstanding),0) AS outstanding_portfolio,
+          COALESCE(SUM(amount_in_arrears),0) AS amount_in_arrears,
+          COALESCE(SUM(CASE WHEN days_in_arrears >= 30 THEN outstanding ELSE 0 END),0) AS par30_amount
+        FROM (
+          SELECT l.id,
+                 COALESCE(s.total_repayable, l.amount) + COALESCE(l.penalties,0) AS total_repayable,
+                 MAX(COALESCE(s.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) AS outstanding,
+                 COALESCE(s.amount_in_arrears,0) AS amount_in_arrears,
+                 s.days_in_arrears AS days_in_arrears
+          FROM loans l
+          LEFT JOIN (
+            SELECT loan_id,
+                   SUM(repayment) AS total_repayable,
+                   SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment + COALESCE(penalty,0) ELSE 0 END) AS amount_in_arrears,
+                   CAST(julianday(date('now')) - julianday(MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END)) AS INTEGER) AS days_in_arrears
+            FROM loan_schedule
+            GROUP BY loan_id
+          ) s ON s.loan_id=l.id
+          WHERE l.disbursed_date IS NOT NULL
+            AND strftime('%Y-%m', l.disbursed_date)=?
+        )
+    """, (report_month,)).fetchone()
     due_today = db.execute("""
         SELECT COALESCE(SUM(s.repayment),0)
         FROM loan_schedule s
@@ -98,6 +124,12 @@ def dashboard():
     par_rate = round((par_amount / outstanding_portfolio * 100), 1) if outstanding_portfolio else 0
     par30_amount = float(portfolio["par30_amount"] or 0)
     par30_rate = round((par30_amount / outstanding_portfolio * 100), 1) if outstanding_portfolio else 0
+    monthly_outstanding_portfolio = float(monthly_portfolio["outstanding_portfolio"] or 0)
+    monthly_par_amount = float(monthly_portfolio["amount_in_arrears"] or 0)
+    monthly_par_rate = round((monthly_par_amount / monthly_outstanding_portfolio * 100), 1) if monthly_outstanding_portfolio else 0
+    monthly_par30_amount = float(monthly_portfolio["par30_amount"] or 0)
+    monthly_par30_rate = round((monthly_par30_amount / monthly_outstanding_portfolio * 100), 1) if monthly_outstanding_portfolio else 0
+    monthly_collection_rate = round((account_loan_repayments / account_loan_disbursed * 100), 1) if account_loan_disbursed else 0
 
     db.close()
     return success({
@@ -127,6 +159,12 @@ def dashboard():
             "portfolio_at_risk": par_rate,
             "par30_amount": par30_amount,
             "par30_rate": par30_rate,
+            "monthly_collection_rate": monthly_collection_rate,
+            "monthly_outstanding_portfolio": monthly_outstanding_portfolio,
+            "monthly_amount_in_arrears": monthly_par_amount,
+            "monthly_portfolio_at_risk": monthly_par_rate,
+            "monthly_par30_amount": monthly_par30_amount,
+            "monthly_par30_rate": monthly_par30_rate,
             "due_today": due_today,
         },
         "monthly_repayments": [{"month": r["month"], "total": r["total"]} for r in reversed(monthly)],

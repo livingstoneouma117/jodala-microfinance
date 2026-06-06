@@ -14,6 +14,9 @@ const EMPTY_STATS = {
   due_today: 0,
   collection_rate: 0,
   portfolio_at_risk: 0,
+  monthly_collection_rate: 0,
+  monthly_outstanding_portfolio: 0,
+  monthly_portfolio_at_risk: 0,
 };
 
 const EMPTY_MONTHLY = {
@@ -170,10 +173,13 @@ function Dashboard() {
         <StatCard label="Savings This Month" value={formatKES(monthlySummary.savings_collections)} tone="primary" subtitle="Collected this month" />
         <StatCard label="Repayments This Month" value={formatKES(monthlySummary.loan_repayments)} tone="ok" subtitle="Repaid this month" />
         <StatCard label="Disbursed This Month" value={formatKES(monthlySummary.loan_disbursed)} tone="warn" subtitle="Loans issued this month" />
+        <StatCard label="Outstanding Portfolio" value={formatKES(stats.monthly_outstanding_portfolio)} tone="warn" subtitle="Loans issued this month still outstanding" />
         <StatCard label="Expenses This Month" value={formatKES(monthlySummary.expenses)} tone="danger" subtitle="Spent this month" />
         <StatCard label="Net Movement" value={formatKES(monthlySummary.net)} tone={Number(monthlySummary.net || 0) >= 0 ? "ok" : "danger"} subtitle="This month inflow minus outflow" />
+        <StatCard label="Monthly Collection Rate" value={`${Number(stats.monthly_collection_rate || 0).toFixed(1)}%`} tone="ok" subtitle="Repaid / disbursed this month" />
+        <StatCard label="Monthly PAR" value={`${Number(stats.monthly_portfolio_at_risk || 0).toFixed(1)}%`} tone="danger" subtitle="Arrears pressure this month" />
         <StatCard label="Due Today" value={formatKES(stats.due_today)} tone="warn" subtitle="Today schedule" />
-        <StatCard label="Portfolio At Risk" value={`${Number(stats.portfolio_at_risk || 0).toFixed(1)}%`} tone="danger" subtitle="Arrears pressure" />
+        <StatCard label="Portfolio At Risk" value={`${Number(stats.portfolio_at_risk || 0).toFixed(1)}%`} tone="danger" subtitle="All-time arrears pressure" />
       </div>
 
       <div className="layout-two-wide">

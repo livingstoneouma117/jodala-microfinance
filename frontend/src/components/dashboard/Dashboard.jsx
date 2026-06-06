@@ -17,6 +17,7 @@ const EMPTY_STATS = {
   monthly_collection_rate: 0,
   monthly_outstanding_portfolio: 0,
   monthly_portfolio_at_risk: 0,
+  monthly_profit: 0,
 };
 
 const EMPTY_MONTHLY = {
@@ -113,6 +114,7 @@ function LoanStatusChart({ items }) {
 function Dashboard() {
   const [stats, setStats] = useState(EMPTY_STATS);
   const [monthlySummary, setMonthlySummary] = useState(EMPTY_MONTHLY);
+  const [cashFlowForecast, setCashFlowForecast] = useState({ month: "", projected_inflow: 0, projected_outflow: 0, projected_net: 0 });
   const [monthly, setMonthly] = useState([]);
   const [breakdown, setBreakdown] = useState([]);
   const [recentLoans, setRecentLoans] = useState([]);
@@ -128,6 +130,7 @@ function Dashboard() {
         const data = res?.data || {};
         setStats(data.stats || EMPTY_STATS);
         setMonthlySummary(data.monthly_summary || EMPTY_MONTHLY);
+        setCashFlowForecast(data.cash_flow_forecast || { month: "", projected_inflow: 0, projected_outflow: 0, projected_net: 0 });
         setMonthly(data.monthly_repayments || []);
         setBreakdown(data.loan_breakdown || []);
         setRecentLoans(data.recent_loans || []);
@@ -178,6 +181,7 @@ function Dashboard() {
         <StatCard label="Net Movement" value={formatKES(monthlySummary.net)} tone={Number(monthlySummary.net || 0) >= 0 ? "ok" : "danger"} subtitle="This month inflow minus outflow" />
         <StatCard label="Monthly Collection Rate" value={`${Number(stats.monthly_collection_rate || 0).toFixed(1)}%`} tone="ok" subtitle="Repaid / disbursed this month" />
         <StatCard label="Monthly PAR" value={`${Number(stats.monthly_portfolio_at_risk || 0).toFixed(1)}%`} tone="danger" subtitle="Arrears pressure this month" />
+        <StatCard label="Monthly Profit" value={formatKES(stats.monthly_profit)} tone={Number(stats.monthly_profit || 0) >= 0 ? "ok" : "danger"} subtitle="Loan repayments minus expenses" />
         <StatCard label="Due Today" value={formatKES(stats.due_today)} tone="warn" subtitle="Today schedule" />
         <StatCard label="Portfolio At Risk" value={`${Number(stats.portfolio_at_risk || 0).toFixed(1)}%`} tone="danger" subtitle="All-time arrears pressure" />
       </div>
@@ -197,6 +201,18 @@ function Dashboard() {
       <section className="panel stack">
         <h3>Recent Loans</h3>
         <DataTable columns={recentColumns} rows={recentLoans} rowKey="id" loading={loading} emptyMessage="No recent loans found." />
+      </section>
+
+      <section className="panel stack">
+        <div className="row-between">
+          <h3>Cash Flow Forecast</h3>
+          <span className="muted">{cashFlowForecast.month || "Next month"}</span>
+        </div>
+        <div className="card-grid compact">
+          <StatCard label="Projected Inflow" value={formatKES(cashFlowForecast.projected_inflow)} tone="ok" />
+          <StatCard label="Projected Outflow" value={formatKES(cashFlowForecast.projected_outflow)} tone="warn" />
+          <StatCard label="Projected Net" value={formatKES(cashFlowForecast.projected_net)} tone={Number(cashFlowForecast.projected_net || 0) >= 0 ? "ok" : "danger"} />
+        </div>
       </section>
     </section>
   );

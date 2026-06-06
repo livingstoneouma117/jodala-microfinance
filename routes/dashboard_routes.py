@@ -34,6 +34,15 @@ def dashboard():
     account_current_balance = account_opening_balance
     monthly_rows = account_report.get("months") or []
     current_month = monthly_rows[-1] if monthly_rows else {}
+    forecast_month = {}
+    if monthly_rows:
+        tail = monthly_rows[-3:] if len(monthly_rows) >= 3 else monthly_rows
+        forecast_month = {
+            "month": (date.today().replace(day=1).strftime("%Y-%m")),
+            "projected_inflow": round(sum(float(row.get("inflow") or 0) for row in tail) / len(tail), 2),
+            "projected_outflow": round(sum(float(row.get("outflow") or 0) for row in tail) / len(tail), 2),
+        }
+        forecast_month["projected_net"] = round(forecast_month["projected_inflow"] - forecast_month["projected_outflow"], 2)
     report_month = date.today().strftime("%Y-%m")
     portfolio = db.execute("""
         SELECT
@@ -130,6 +139,7 @@ def dashboard():
     monthly_par30_amount = float(monthly_portfolio["par30_amount"] or 0)
     monthly_par30_rate = round((monthly_par30_amount / monthly_outstanding_portfolio * 100), 1) if monthly_outstanding_portfolio else 0
     monthly_collection_rate = round((account_loan_repayments / account_loan_disbursed * 100), 1) if account_loan_disbursed else 0
+    monthly_profit = float(current_month.get("loan_repayments") or 0) - float(current_month.get("expenses") or 0)
 
     db.close()
     return success({
@@ -165,6 +175,7 @@ def dashboard():
             "monthly_portfolio_at_risk": monthly_par_rate,
             "monthly_par30_amount": monthly_par30_amount,
             "monthly_par30_rate": monthly_par30_rate,
+            "monthly_profit": monthly_profit,
             "due_today": due_today,
         },
         "monthly_repayments": [{"month": r["month"], "total": r["total"]} for r in reversed(monthly)],
@@ -180,6 +191,7 @@ def dashboard():
             "net": float(current_month.get("net") or 0),
             "closing_balance": float(current_month.get("closing_balance") or account_current_balance or 0),
         },
+        "cash_flow_forecast": forecast_month,
         "recent_loans":       recent_loans,
         "loan_breakdown":     loan_breakdown,
         "top_borrowers":      top_borrowers,

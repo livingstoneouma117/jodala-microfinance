@@ -1567,7 +1567,7 @@ function renderDashStats(s, monthly={}){
     {
       label:'Main Account Balance',
       value:`KES ${fmt((monthly.closing_balance ?? s.account_current_balance) || 0,0)}`,
-      sub:`Opening/Current KES ${fmt((monthly.opening_balance ?? s.account_opening_balance) || 0,0)} · Monthly Inflow KES ${fmt(monthly.inflow || 0,0)} · Monthly Outflow KES ${fmt(monthly.outflow || 0,0)}`,
+      sub:`Opening/Current KES ${fmt((s.account_current_balance ?? monthly.closing_balance) || 0,0)} · Monthly Inflow KES ${fmt(monthly.inflow || 0,0)} · Monthly Outflow KES ${fmt(monthly.outflow || 0,0)}`,
       icon:'🏧',
       cls:'stat-cyan'
     },

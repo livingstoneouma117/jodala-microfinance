@@ -197,7 +197,12 @@ function Dashboard() {
       {error ? <p className="error-box">{error}</p> : null}
 
       <div className="card-grid">
-        <StatCard label="Month-End Balance" value={formatKES(monthlySummary.closing_balance)} tone="primary" subtitle={monthlySummary.month ? `Closing balance for ${monthlySummary.month}` : "Current month closing balance"} />
+        <StatCard
+          label="Month-End Balance"
+          value={formatKES(monthlySummary.closing_balance)}
+          tone="primary"
+          subtitle={`Opening/Current ${formatKES(stats.account_current_balance || monthlySummary.closing_balance)}`}
+        />
         <StatCard label="Active Loans" value={String(stats.active_loans || 0)} tone="ok" subtitle="Currently running" />
         <StatCard label="Overdue Loans" value={String(stats.overdue_loans || 0)} tone="danger" subtitle="Need follow-up" />
         <StatCard label="Total Members" value={String(stats.total_members || 0)} subtitle="Registered members" />

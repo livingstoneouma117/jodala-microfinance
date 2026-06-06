@@ -1571,7 +1571,7 @@ function renderDashStats(s, monthly={}){
       icon:'🏧',
       cls:'stat-cyan'
     },
-    {label:'Portfolio Outstanding',value:`KES ${fmt(s.monthly_outstanding_portfolio ?? s.outstanding_portfolio,0)}`,sub:`Monthly disbursed KES ${fmt(monthly.loan_disbursed || s.account_loan_disbursed || 0,0)} · total outstanding balance after issue`,icon:'💰',cls:'stat-green'},
+    {label:'Portfolio Outstanding',value:`KES ${fmt(s.outstanding_portfolio || 0,0)}`,sub:`Total owed across active loans · monthly disbursed KES ${fmt(monthly.loan_disbursed || s.account_loan_disbursed || 0,0)}`,icon:'💰',cls:'stat-green'},
     {label:'Portfolio at Risk',value:`${fmt(s.portfolio_at_risk,1)}%`,sub:`KES ${fmt(s.amount_in_arrears,0)} in arrears`,icon:'⚠️',cls:'stat-red'},
     {label:'Loans in Pipeline',value:(s.pending_loans||0)+(s.approved_loans||0),sub:`${s.pending_loans||0} pending · ${s.approved_loans||0} approved`,icon:'📋',cls:'stat-blue'},
     {label:'Due Today',value:`KES ${fmt(s.due_today,0)}`,sub:`${s.active_loans||0} active loans`,icon:'🏦',cls:'stat-amber'},

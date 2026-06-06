@@ -204,7 +204,12 @@ function Dashboard() {
         <StatCard label="Savings This Month" value={formatKES(monthlySummary.savings_collections)} tone="primary" subtitle="Collected this month" />
         <StatCard label="Repayments This Month" value={formatKES(monthlySummary.loan_repayments)} tone="ok" subtitle="Repaid this month" />
         <StatCard label="Disbursed This Month" value={formatKES(monthlySummary.loan_disbursed)} tone="warn" subtitle="Loans issued this month" />
-        <StatCard label="Outstanding Portfolio" value={formatKES(stats.monthly_outstanding_portfolio)} tone="warn" subtitle="Loans issued this month still outstanding" />
+        <StatCard
+          label="Outstanding Portfolio"
+          value={formatKES(stats.monthly_outstanding_portfolio)}
+          tone="warn"
+          subtitle={`Monthly disbursed ${formatKES(monthlySummary.loan_disbursed)} · total outstanding balance after issue`}
+        />
         <StatCard label="Expenses This Month" value={formatKES(monthlySummary.expenses)} tone="danger" subtitle="Spent this month" />
         <StatCard label="Net Movement" value={formatKES(monthlySummary.net)} tone={Number(monthlySummary.net || 0) >= 0 ? "ok" : "danger"} subtitle="This month inflow minus outflow" />
         <StatCard label="Monthly Collection Rate" value={`${Number(stats.monthly_collection_rate || 0).toFixed(1)}%`} tone="ok" subtitle="Repaid / disbursed this month" />

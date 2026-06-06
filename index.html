@@ -773,6 +773,9 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <div class="page-header">
           <div><div class="page-header-title">Reports &amp; Analytics</div><div class="page-header-sub">Export and analyse system data</div></div>
           <div class="flex gap2 flex-wrap">
+            <select id="report-month-filter" class="form-select" style="width:auto" onchange="loadReports()">
+              <option value="">All Loan Months</option>
+            </select>
             <select id="report-export-format" class="form-select" style="width:auto">
               <option value="csv">CSV</option>
               <option value="xlsx">Excel (.xlsx)</option>
@@ -2705,16 +2708,27 @@ async function submitRepayment(){
 }
 
 // ── REPORTS ──────────────────────────────────────────────────────────────────
+function renderReportMonthFilter(months, selected=''){
+  const sel=document.getElementById('report-month-filter');
+  if(!sel)return;
+  const current=selected || sel.value || '';
+  sel.innerHTML='<option value="">All Loan Months</option>' + (months||[]).map(m=>`<option value="${m.month}">${fmtMonthLabel(m.month)}</option>`).join('');
+  if(current) sel.value=current;
+}
+
 async function loadReports(){
   try{
+    const month=document.getElementById('report-month-filter')?.value||'';
+    const monthQuery=month?`?month=${encodeURIComponent(month)}`:'';
     const [port,sav,accountMonthly]=await Promise.all([
-      api('/reports/portfolio'),
+      api(`/reports/portfolio${monthQuery}`),
       api('/reports/savings'),
       api('/reports/account-monthly')
     ]);
     if(!port?.success||!sav?.success)return;
 
     const {loans,totals}=port.data;
+    renderReportMonthFilter(port.data.months||[], port.data.selected_month||month);
     const t=totals;
     const reportTotalRepayable=Number(t.total_repayable||t.total_disbursed||0);
     const reportOutstanding=Math.max(0,Number(t.total_outstanding ?? (reportTotalRepayable-Number(t.total_repaid||0))));
@@ -2801,7 +2815,9 @@ function renderAccountMonthlyReport(data){
 function exportReport(type, formatOpt=null){
   const format=(formatOpt||document.getElementById('report-export-format')?.value||'csv').toLowerCase();
   const safeFormat=(format==='xlsx'?'xlsx':'csv');
-  fetch(`${API}/reports/export/${type}?format=${safeFormat}`, {headers:{'Authorization':'Bearer '+token}})
+  const month=document.getElementById('report-month-filter')?.value||'';
+  const monthQuery=month&&type==='loans'?`&month=${encodeURIComponent(month)}`:'';
+  fetch(`${API}/reports/export/${type}?format=${safeFormat}${monthQuery}`, {headers:{'Authorization':'Bearer '+token}})
     .then(async r=>{
       if(!r.ok){
         const body=await r.json().catch(()=>null);

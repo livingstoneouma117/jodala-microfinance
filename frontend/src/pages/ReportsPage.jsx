@@ -15,6 +15,13 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function formatMonthLabel(monthKey) {
+  if (!monthKey) return "--";
+  const date = new Date(`${monthKey}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) return monthKey;
+  return date.toLocaleDateString("en-KE", { month: "short", year: "numeric" });
+}
+
 function flattenFinancialRows(data, viewType) {
   if (viewType === "profit-loss") {
     return [
@@ -46,6 +53,8 @@ function ReportsPage() {
   const [rows, setRows] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("1000");
+  const [loanMonths, setLoanMonths] = useState([]);
+  const [selectedLoanMonth, setSelectedLoanMonth] = useState("");
   const [error, setError] = useState("");
   const [exportType, setExportType] = useState("account-monthly");
   const [exportFormat, setExportFormat] = useState("xlsx");
@@ -95,7 +104,6 @@ function ReportsPage() {
 
     const endpointMap = {
       "account-monthly": "/api/reports/account-monthly",
-      loans: "/api/reports/portfolio",
       savings: "/api/reports/savings",
       "chart-of-accounts": "/api/accounting/chart-of-accounts",
       "journal-entries": "/api/accounting/journal-entries?limit=50",
@@ -105,12 +113,16 @@ function ReportsPage() {
       "balance-sheet": "/api/accounting/balance-sheet",
       "cash-flow": "/api/accounting/cash-flow",
     };
+    const loansEndpoint = `/api/reports/portfolio${selectedLoanMonth ? `?month=${encodeURIComponent(selectedLoanMonth)}` : ""}`;
 
-    apiFetch(endpointMap[viewType])
+    apiFetch(viewType === "loans" ? loansEndpoint : endpointMap[viewType])
       .then((res) => {
         if (!mounted) return;
         const data = res?.data;
-        if (viewType === "loans") setRows(data?.loans || []);
+        if (viewType === "loans") {
+          setRows(data?.loans || []);
+          setLoanMonths(data?.months || []);
+        }
         else if (viewType === "savings") setRows(data || []);
         else if (viewType === "account-monthly") setRows(data?.months || []);
         else if (viewType === "journal-entries") setRows(data?.entries || []);
@@ -131,7 +143,7 @@ function ReportsPage() {
     return () => {
       mounted = false;
     };
-  }, [selectedAccount, viewType]);
+  }, [selectedAccount, selectedLoanMonth, viewType]);
 
   const columns = useMemo(() => {
     if (viewType === "loans") {
@@ -255,7 +267,8 @@ function ReportsPage() {
   async function exportReport() {
     setExporting(true);
     try {
-      const res = await apiFetchBlob(`/api/reports/export/${exportType}?format=${exportFormat}`);
+      const loanMonthQuery = exportType === "loans" && selectedLoanMonth ? `&month=${encodeURIComponent(selectedLoanMonth)}` : "";
+      const res = await apiFetchBlob(`/api/reports/export/${exportType}?format=${exportFormat}${loanMonthQuery}`);
       const extension = exportFormat === "xlsx" ? "xlsx" : "csv";
       triggerDownload(res.blob, `${exportType}-report.${extension}`);
       pushToast(`Exported ${exportType} report (${exportFormat.toUpperCase()}).`, "success");
@@ -305,9 +318,24 @@ function ReportsPage() {
               ))}
             </select>
           ) : null}
+
+          {viewType === "loans" ? (
+            <select value={selectedLoanMonth} onChange={(event) => setSelectedLoanMonth(event.target.value)}>
+              <option value="">All Months</option>
+              {loanMonths.map((month) => (
+                <option key={month.month} value={month.month}>
+                  {formatMonthLabel(month.month)}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
 
         {error ? <p className="error-box">{error}</p> : null}
+
+        {viewType === "loans" ? (
+          <p className="muted">Select a month to view only the loans disbursed in that period.</p>
+        ) : null}
 
         <DataTable
           columns={columns}

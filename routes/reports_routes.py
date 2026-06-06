@@ -293,8 +293,17 @@ def report_portfolio():
     db = get_db()
     refresh_loan_statuses(db)
     db.commit()
+    month_filter = (request.args.get("month") or "").strip()
+    month_clause = " AND strftime('%Y-%m', l.disbursed_date)=?" if month_filter else ""
+    month_params = (month_filter,) if month_filter else ()
+    available_months = rows_to_list(db.execute(
+        """SELECT DISTINCT strftime('%Y-%m', disbursed_date) AS month
+           FROM loans
+           WHERE disbursed_date IS NOT NULL
+           ORDER BY month DESC"""
+    ).fetchall())
     rows = rows_to_list(db.execute(
-        """SELECT l.*, m.name as member_name,
+        f"""SELECT l.*, m.name as member_name,
            COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) as total_repayable,
            CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) END as outstanding,
            CASE WHEN l.status='written_off' THEN 0 ELSE COALESCE(risk.amount_in_arrears,0) END as amount_in_arrears,
@@ -313,10 +322,12 @@ def report_portfolio():
              FROM loan_schedule
              GROUP BY loan_id
            ) risk ON risk.loan_id=l.id
-           ORDER BY l.disbursed_date DESC"""
+           WHERE l.disbursed_date IS NOT NULL{month_clause}
+           ORDER BY l.disbursed_date DESC""",
+        month_params
     ).fetchall())
     totals = db.execute(
-        """SELECT
+        f"""SELECT
            COALESCE(SUM(amount),0) as total_disbursed,
            COALESCE(SUM(total_paid),0) as total_repaid,
            COALESCE(SUM(CASE WHEN status='written_off' THEN 0 ELSE total_repayable END),0) as total_repayable,
@@ -326,24 +337,25 @@ def report_portfolio():
            COALESCE(SUM(penalties),0) as total_penalties,
            COUNT(*) as total_loans
            FROM (
-               SELECT l.id, l.amount, l.total_paid, l.penalties, l.disbursed_date, l.status,
-                       COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) as total_repayable,
-                       COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
-                       risk.days_in_arrears
-               FROM loans l
-               LEFT JOIN (
-                 SELECT loan_id,
-                        SUM(repayment) as total_repayable,
-                        SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment + COALESCE(penalty,0) ELSE 0 END) as amount_in_arrears,
-                        CAST(julianday(date('now')) - julianday(MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END)) AS INTEGER) as days_in_arrears
-                 FROM loan_schedule
-                 GROUP BY loan_id
-               ) risk ON risk.loan_id=l.id
-               WHERE l.disbursed_date IS NOT NULL
-           )"""
+                SELECT l.id, l.amount, l.total_paid, l.penalties, l.disbursed_date, l.status,
+                        COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) as total_repayable,
+                        COALESCE(risk.amount_in_arrears,0) as amount_in_arrears,
+                        risk.days_in_arrears
+                FROM loans l
+                LEFT JOIN (
+                  SELECT loan_id,
+                         SUM(repayment) as total_repayable,
+                         SUM(CASE WHEN paid=0 AND due_date < date('now') THEN repayment + COALESCE(penalty,0) ELSE 0 END) as amount_in_arrears,
+                         CAST(julianday(date('now')) - julianday(MIN(CASE WHEN paid=0 AND due_date < date('now') THEN due_date END)) AS INTEGER) as days_in_arrears
+                  FROM loan_schedule
+                  GROUP BY loan_id
+                ) risk ON risk.loan_id=l.id
+                WHERE l.disbursed_date IS NOT NULL{month_clause}
+            )""",
+        month_params
     ).fetchone()
     db.close()
-    return success({"loans": rows, "totals": dict(totals)})
+    return success({"loans": rows, "totals": dict(totals), "months": available_months, "selected_month": month_filter})
 
 
 
@@ -489,18 +501,23 @@ def export_report(report_type):
     refresh_loan_statuses(db)
     db.commit()
     export_format = (request.args.get("format") or "csv").strip().lower()
+    month_filter = (request.args.get("month") or "").strip()
+    month_clause = " AND strftime('%Y-%m', l.disbursed_date)=?" if month_filter else ""
+    month_params = (month_filter,) if month_filter else ()
     rows = []
     headers = []
 
     if report_type == "loans":
         headers = ["ID","Borrower Name","Member Type","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"]
         rows = rows_to_list(db.execute(
-            """SELECT l.id,m.name AS 'Borrower Name',m.member_type AS 'Member Type',l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
+            f"""SELECT l.id,m.name AS 'Borrower Name',m.member_type AS 'Member Type',l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
                       CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(SUM(s.repayment), l.amount)+COALESCE(l.penalties,0)-l.total_paid, 0) END as outstanding,l.penalties
-               FROM loans l
-               JOIN members m ON l.member_id=m.id
-               LEFT JOIN loan_schedule s ON s.loan_id=l.id
-               GROUP BY l.id"""
+                FROM loans l
+                JOIN members m ON l.member_id=m.id
+                LEFT JOIN loan_schedule s ON s.loan_id=l.id
+                WHERE l.disbursed_date IS NOT NULL{month_clause}
+                GROUP BY l.id""",
+            month_params
         ).fetchall())
     elif report_type == "repayments":
         headers = ["ID","Loan","Borrower Name","Amount","Date","Method","Reference","Type"]
@@ -587,7 +604,7 @@ def export_report(report_type):
         return send_file(
             stream,
             as_attachment=True,
-            download_name=f"{report_type}-report.xlsx",
+            download_name=f"{report_type}-report{('-' + month_filter) if month_filter and report_type == 'loans' else ''}.xlsx",
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
@@ -599,7 +616,7 @@ def export_report(report_type):
     return Response(
         output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment;filename={report_type}-report.csv"}
+        headers={"Content-Disposition": f"attachment;filename={report_type}-report{('-' + month_filter) if month_filter and report_type == 'loans' else ''}.csv"}
     )
 
 

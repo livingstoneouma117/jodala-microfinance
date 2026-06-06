@@ -1,9 +1,12 @@
 from api import Blueprint
 
+from datetime import timezone
+
 from services.common import *
 
 dashboard_bp = Blueprint("dashboard", __name__)
 bp = dashboard_bp
+APP_BUILD_VERSION = "3.0.0"
 
 @bp.route("/api/dashboard", methods=["GET"])
 @login_required
@@ -143,6 +146,8 @@ def dashboard():
 
     db.close()
     return success({
+        "build_version": APP_BUILD_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "stats": {
             "active_loans":    active_loans,
             "overdue_loans":   overdue_loans,

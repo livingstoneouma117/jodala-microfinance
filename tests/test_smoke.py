@@ -144,6 +144,8 @@ def test_dashboard_includes_monthly_summary_metrics(client):
     assert "monthly_profit" in payload["stats"]
     assert "cash_flow_forecast" in payload
     assert "projected_net" in payload["cash_flow_forecast"]
+    assert payload["build_version"] == "3.0.0"
+    assert "generated_at" in payload
 
 
 def test_overdue_penalties_are_applied_to_outstanding(client):

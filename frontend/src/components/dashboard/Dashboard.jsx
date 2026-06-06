@@ -111,8 +111,24 @@ function LoanStatusChart({ items }) {
   );
 }
 
+function formatBuildStamp(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-KE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  });
+}
+
 function Dashboard() {
   const [stats, setStats] = useState(EMPTY_STATS);
+  const [buildInfo, setBuildInfo] = useState({ build_version: "", generated_at: "" });
   const [monthlySummary, setMonthlySummary] = useState(EMPTY_MONTHLY);
   const [cashFlowForecast, setCashFlowForecast] = useState({ month: "", projected_inflow: 0, projected_outflow: 0, projected_net: 0 });
   const [monthly, setMonthly] = useState([]);
@@ -128,6 +144,10 @@ function Dashboard() {
       .then((res) => {
         if (!mounted) return;
         const data = res?.data || {};
+        setBuildInfo({
+          build_version: data.build_version || "",
+          generated_at: data.generated_at || "",
+        });
         setStats(data.stats || EMPTY_STATS);
         setMonthlySummary(data.monthly_summary || EMPTY_MONTHLY);
         setCashFlowForecast(data.cash_flow_forecast || { month: "", projected_inflow: 0, projected_outflow: 0, projected_net: 0 });
@@ -162,8 +182,16 @@ function Dashboard() {
   return (
     <section className="stack">
       <header className="page-head">
-        <h2>Portfolio Snapshot</h2>
-        <p>Live portfolio, risk, and cashflow metrics with monthly trend charts.</p>
+        <div className="row-between">
+          <div>
+            <h2>Portfolio Snapshot</h2>
+            <p>Live portfolio, risk, and cashflow metrics with monthly trend charts.</p>
+          </div>
+          <div className="build-stamp muted">
+            <strong>{buildInfo.build_version ? `Build ${buildInfo.build_version}` : "Build"}</strong>
+            {buildInfo.generated_at ? <span>{formatBuildStamp(buildInfo.generated_at)}</span> : <span>Waiting for build info</span>}
+          </div>
+        </div>
       </header>
 
       {error ? <p className="error-box">{error}</p> : null}

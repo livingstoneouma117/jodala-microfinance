@@ -76,10 +76,10 @@ def create_member():
     db  = get_db()
     try:
         db.execute(
-            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,address,status,joined_date,savings,created_by,member_type)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,address,region,status,joined_date,savings,created_by,member_type)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (mid, d["name"], d.get("phone"), d.get("email"), national_id,
-             d.get("gender"), d.get("dob"), d.get("address"), d.get("status","active"),
+             d.get("gender"), d.get("dob"), d.get("address"), d.get("region"), d.get("status","active"),
              d["joined_date"], 0, g.user["sub"], member_type)
         )
         db.execute("INSERT INTO savings_accounts (member_id,balance) VALUES (?,?)", (mid, 0))
@@ -103,10 +103,10 @@ def update_member(member_id):
     db.execute(
         """UPDATE members SET name=COALESCE(?,name), phone=COALESCE(?,phone),
            email=COALESCE(?,email), gender=COALESCE(?,gender), dob=COALESCE(?,dob),
-           address=COALESCE(?,address), status=COALESCE(?,status)
+           address=COALESCE(?,address), region=COALESCE(?,region), status=COALESCE(?,status)
            WHERE id=?""",
         (d.get("name"), d.get("phone"), d.get("email"), d.get("gender"),
-         d.get("dob"), d.get("address"), d.get("status"), member_id)
+         d.get("dob"), d.get("address"), d.get("region"), d.get("status"), member_id)
     )
     db.commit()
     member = row_to_dict(db.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone())
@@ -197,10 +197,10 @@ def create_borrower():
     db = get_db()
     try:
         db.execute(
-            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,address,status,joined_date,savings,created_by,member_type)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,address,region,status,joined_date,savings,created_by,member_type)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (bid, d["name"], d.get("phone"), d.get("email"), national_id,
-             d.get("gender"), d.get("dob"), d.get("address"), d.get("status","active"),
+             d.get("gender"), d.get("dob"), d.get("address"), d.get("region"), d.get("status","active"),
              d["joined_date"], 0, g.user["sub"], "borrower")
         )
         db.execute("INSERT INTO savings_accounts (member_id,balance) VALUES (?,?)", (bid, 0))

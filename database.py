@@ -55,6 +55,7 @@ def init_db():
         gender        TEXT,
         dob           TEXT,
         address       TEXT,
+        region        TEXT,
         status        TEXT NOT NULL DEFAULT 'active',
         joined_date   TEXT NOT NULL,
         savings       REAL NOT NULL DEFAULT 0,
@@ -587,6 +588,8 @@ def _migrate_schema(c):
     member_cols = {row[1] for row in c.execute("PRAGMA table_info(members)").fetchall()}
     if "member_type" not in member_cols:
         c.execute("ALTER TABLE members ADD COLUMN member_type TEXT NOT NULL DEFAULT 'member'")
+    if "region" not in member_cols:
+        c.execute("ALTER TABLE members ADD COLUMN region TEXT")
 
     loan_cols = {row[1] for row in c.execute("PRAGMA table_info(loans)").fetchall()}
     if loan_cols and "penalties" not in loan_cols:

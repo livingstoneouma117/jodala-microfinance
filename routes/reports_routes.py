@@ -354,8 +354,26 @@ def report_portfolio():
             )""",
         month_params
     ).fetchone()
+    regions = rows_to_list(db.execute(
+        f"""SELECT COALESCE(NULLIF(TRIM(m.region), ''), NULLIF(TRIM(m.address), ''), 'Unknown') AS region,
+                  COUNT(*) AS loan_count,
+                  COALESCE(SUM(l.amount),0) AS total_disbursed,
+                  COALESCE(SUM(CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0) END),0) AS outstanding
+           FROM loans l
+           JOIN members m ON m.id=l.member_id
+           LEFT JOIN (
+             SELECT loan_id,
+                    SUM(repayment) as total_repayable
+             FROM loan_schedule
+             GROUP BY loan_id
+           ) risk ON risk.loan_id=l.id
+           WHERE l.disbursed_date IS NOT NULL{month_clause}
+           GROUP BY region
+           ORDER BY total_disbursed DESC, loan_count DESC""",
+        month_params
+    ).fetchall())
     db.close()
-    return success({"loans": rows, "totals": dict(totals), "months": available_months, "selected_month": month_filter})
+    return success({"loans": rows, "totals": dict(totals), "months": available_months, "selected_month": month_filter, "regions": regions})
 
 
 

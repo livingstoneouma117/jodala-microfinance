@@ -51,6 +51,7 @@ function ReportsPage() {
   const [viewType, setViewType] = useState("account-monthly");
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
+  const [regionRows, setRegionRows] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("1000");
   const [loanMonths, setLoanMonths] = useState([]);
@@ -121,6 +122,7 @@ function ReportsPage() {
         const data = res?.data;
         if (viewType === "loans") {
           setRows(data?.loans || []);
+          setRegionRows(data?.regions || []);
           setLoanMonths(data?.months || []);
         }
         else if (viewType === "savings") setRows(data || []);
@@ -344,6 +346,24 @@ function ReportsPage() {
           loading={loading}
           emptyMessage="No report data available."
         />
+
+        {viewType === "loans" ? (
+          <section className="stack">
+            <h3>Borrowing by Region</h3>
+            <DataTable
+              columns={[
+                { key: "region", label: "Region" },
+                { key: "loan_count", label: "Loans" },
+                { key: "total_disbursed", label: "Total Disbursed", render: (row) => formatKES(row.total_disbursed) },
+                { key: "outstanding", label: "Outstanding", render: (row) => formatKES(row.outstanding) },
+              ]}
+              rows={regionRows}
+              rowKey="region"
+              loading={loading}
+              emptyMessage="No regional borrowing data yet."
+            />
+          </section>
+        ) : null}
       </section>
 
 

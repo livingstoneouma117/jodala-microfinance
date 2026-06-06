@@ -32,6 +32,8 @@ def dashboard():
     account_total_inflow = float(account_report["totals"]["inflow"] or 0)
     account_total_outflow = float(account_report["totals"]["outflow"] or 0)
     account_current_balance = account_opening_balance
+    monthly_rows = account_report.get("months") or []
+    current_month = monthly_rows[-1] if monthly_rows else {}
     portfolio = db.execute("""
         SELECT
           COALESCE(SUM(total_repayable),0) AS total_repayable,
@@ -128,6 +130,18 @@ def dashboard():
             "due_today": due_today,
         },
         "monthly_repayments": [{"month": r["month"], "total": r["total"]} for r in reversed(monthly)],
+        "monthly_summary": {
+            "month": current_month.get("month"),
+            "opening_balance": float(current_month.get("opening_balance") or account_current_balance or 0),
+            "savings_collections": float(current_month.get("savings_collections") or 0),
+            "loan_repayments": float(current_month.get("loan_repayments") or 0),
+            "loan_disbursed": float(current_month.get("loan_disbursed") or 0),
+            "expenses": float(current_month.get("expenses") or 0),
+            "inflow": float(current_month.get("inflow") or 0),
+            "outflow": float(current_month.get("outflow") or 0),
+            "net": float(current_month.get("net") or 0),
+            "closing_balance": float(current_month.get("closing_balance") or account_current_balance or 0),
+        },
         "recent_loans":       recent_loans,
         "loan_breakdown":     loan_breakdown,
         "top_borrowers":      top_borrowers,

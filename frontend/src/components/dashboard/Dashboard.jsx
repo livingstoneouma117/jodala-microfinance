@@ -16,6 +16,19 @@ const EMPTY_STATS = {
   portfolio_at_risk: 0,
 };
 
+const EMPTY_MONTHLY = {
+  month: "",
+  opening_balance: 0,
+  savings_collections: 0,
+  loan_repayments: 0,
+  loan_disbursed: 0,
+  expenses: 0,
+  inflow: 0,
+  outflow: 0,
+  net: 0,
+  closing_balance: 0,
+};
+
 function MonthlyRepaymentsChart({ points }) {
   if (!points.length) return <p className="muted">No monthly repayment data yet.</p>;
 
@@ -96,6 +109,7 @@ function LoanStatusChart({ items }) {
 
 function Dashboard() {
   const [stats, setStats] = useState(EMPTY_STATS);
+  const [monthlySummary, setMonthlySummary] = useState(EMPTY_MONTHLY);
   const [monthly, setMonthly] = useState([]);
   const [breakdown, setBreakdown] = useState([]);
   const [recentLoans, setRecentLoans] = useState([]);
@@ -110,6 +124,7 @@ function Dashboard() {
         if (!mounted) return;
         const data = res?.data || {};
         setStats(data.stats || EMPTY_STATS);
+        setMonthlySummary(data.monthly_summary || EMPTY_MONTHLY);
         setMonthly(data.monthly_repayments || []);
         setBreakdown(data.loan_breakdown || []);
         setRecentLoans(data.recent_loans || []);
@@ -148,14 +163,16 @@ function Dashboard() {
       {error ? <p className="error-box">{error}</p> : null}
 
       <div className="card-grid">
-        <StatCard label="Account Balance" value={formatKES(stats.account_current_balance)} tone="primary" subtitle="Main account" />
+        <StatCard label="Month-End Balance" value={formatKES(monthlySummary.closing_balance)} tone="primary" subtitle={monthlySummary.month ? `Closing balance for ${monthlySummary.month}` : "Current month closing balance"} />
         <StatCard label="Active Loans" value={String(stats.active_loans || 0)} tone="ok" subtitle="Currently running" />
         <StatCard label="Overdue Loans" value={String(stats.overdue_loans || 0)} tone="danger" subtitle="Need follow-up" />
         <StatCard label="Total Members" value={String(stats.total_members || 0)} subtitle="Registered members" />
-        <StatCard label="Total Savings" value={formatKES(stats.total_savings)} tone="primary" subtitle="Member savings" />
-        <StatCard label="Total Repaid" value={formatKES(stats.total_repaid)} tone="ok" subtitle="Loan collections" />
+        <StatCard label="Savings This Month" value={formatKES(monthlySummary.savings_collections)} tone="primary" subtitle="Collected this month" />
+        <StatCard label="Repayments This Month" value={formatKES(monthlySummary.loan_repayments)} tone="ok" subtitle="Repaid this month" />
+        <StatCard label="Disbursed This Month" value={formatKES(monthlySummary.loan_disbursed)} tone="warn" subtitle="Loans issued this month" />
+        <StatCard label="Expenses This Month" value={formatKES(monthlySummary.expenses)} tone="danger" subtitle="Spent this month" />
+        <StatCard label="Net Movement" value={formatKES(monthlySummary.net)} tone={Number(monthlySummary.net || 0) >= 0 ? "ok" : "danger"} subtitle="This month inflow minus outflow" />
         <StatCard label="Due Today" value={formatKES(stats.due_today)} tone="warn" subtitle="Today schedule" />
-        <StatCard label="Collection Rate" value={`${Number(stats.collection_rate || 0).toFixed(1)}%`} tone="ok" subtitle="Repaid / Disbursed" />
         <StatCard label="Portfolio At Risk" value={`${Number(stats.portfolio_at_risk || 0).toFixed(1)}%`} tone="danger" subtitle="Arrears pressure" />
       </div>
 

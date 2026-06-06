@@ -113,12 +113,31 @@ def test_report_export_xlsx_contains_summary_data_and_analytics(client):
 
     data = wb["Data"]
     assert data["A1"].value == "ID"
-    assert data["B1"].value == "Member"
+    assert data["B1"].value == "Borrower Name"
+    assert data["C1"].value == "Member Type"
     assert data.max_row > 1
 
     analytics = wb["Analytics"]
     assert analytics.max_row > 3
     assert len(analytics._charts) > 0
+
+
+def test_dashboard_includes_monthly_summary_metrics(client):
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/api/dashboard", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()["data"]
+
+    assert "monthly_summary" in payload
+    monthly = payload["monthly_summary"]
+    assert "month" in monthly
+    assert "closing_balance" in monthly
+    assert "savings_collections" in monthly
+    assert "loan_repayments" in monthly
+    assert "loan_disbursed" in monthly
+    assert "expenses" in monthly
 
 
 def test_overdue_penalties_are_applied_to_outstanding(client):

@@ -493,9 +493,9 @@ def export_report(report_type):
     headers = []
 
     if report_type == "loans":
-        headers = ["ID","Member","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"]
+        headers = ["ID","Borrower Name","Member Type","Amount","Rate%","Term","Method","Status","Disbursed","Paid","Outstanding","Penalties"]
         rows = rows_to_list(db.execute(
-            """SELECT l.id,m.name,l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
+            """SELECT l.id,m.name AS 'Borrower Name',m.member_type AS 'Member Type',l.amount,l.annual_rate,l.term_months,l.method,l.status,l.disbursed_date,l.total_paid,
                       CASE WHEN l.status='written_off' THEN 0 ELSE MAX(COALESCE(SUM(s.repayment), l.amount)+COALESCE(l.penalties,0)-l.total_paid, 0) END as outstanding,l.penalties
                FROM loans l
                JOIN members m ON l.member_id=m.id
@@ -503,9 +503,9 @@ def export_report(report_type):
                GROUP BY l.id"""
         ).fetchall())
     elif report_type == "repayments":
-        headers = ["ID","Loan","Member","Amount","Date","Method","Reference","Type"]
+        headers = ["ID","Loan","Borrower Name","Amount","Date","Method","Reference","Type"]
         rows = rows_to_list(db.execute(
-            "SELECT r.id,r.loan_id,m.name,r.amount,r.payment_date,r.method,r.reference,r.type FROM repayments r JOIN members m ON r.member_id=m.id ORDER BY r.payment_date DESC"
+            "SELECT r.id,r.loan_id,m.name AS 'Borrower Name',r.amount,r.payment_date,r.method,r.reference,r.type FROM repayments r JOIN members m ON r.member_id=m.id ORDER BY r.payment_date DESC"
         ).fetchall())
     elif report_type == "savings":
         headers = ["Member ID","Member","Balance","Status"]
@@ -606,4 +606,3 @@ def export_report(report_type):
 # ══════════════════════════════════════════════════════════════════════════════
 # ACCOUNTING
 # ══════════════════════════════════════════════════════════════════════════════
-

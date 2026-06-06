@@ -77,6 +77,17 @@ function RepaymentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const selectedLoan = loans.find((loan) => String(loan.id) === String(form.loan_id));
+    if (!selectedLoan) return;
+
+    const outstanding = Math.max(0, Number(selectedLoan.outstanding || 0));
+    setForm((prev) => {
+      const nextAmount = String(outstanding);
+      return prev.amount === nextAmount ? prev : { ...prev, amount: nextAmount };
+    });
+  }, [form.loan_id, loans]);
+
   const columns = useMemo(
     () => [
       { key: "id", label: "Receipt" },

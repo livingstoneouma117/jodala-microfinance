@@ -1093,7 +1093,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         <div class="form-group"><label class="form-label">Loan <span class="req">*</span></label><select id="rp-loan" class="form-select" onchange="updateRepayInfo()"><option value="">— Select Loan —</option></select></div>
         <div id="rp-info" class="surface2" style="display:none">
           <div class="flex justify-between text-sm mb2"><span class="text-muted">Outstanding Balance</span><span class="font-bold text-red" id="rp-balance">—</span></div>
-          <div class="flex justify-between text-sm mb2"><span class="text-muted">Next Instalment</span><span class="font-bold text-amber" id="rp-next">—</span></div>
+            <div class="flex justify-between text-sm mb2"><span class="text-muted">Repayment Amount</span><span class="font-bold text-amber" id="rp-next">—</span></div>
           <div id="rp-penalty-row" class="flex justify-between text-sm" style="display:none!important"><span class="text-muted">Penalty</span><span class="font-bold text-red" id="rp-penalty">—</span></div>
         </div>
         <div class="form-group"><label class="form-label">Amount (KES) <span class="req">*</span></label><input id="rp-amount" type="number" class="form-input" min="1" placeholder="10000"/></div>
@@ -2678,11 +2678,10 @@ async function updateRepayInfo(){
   try{
     const res=await api(`/loans/${id}`);
     const {loan,summary,schedule}=res.data;
-    const next=schedule.find(s=>!s.paid);
     document.getElementById('rp-balance').textContent=`KES ${fmt(summary.outstanding,0)}`;
-    document.getElementById('rp-next').textContent=next?`KES ${fmt(next.repayment,0)} (due ${fmtSafeD(next.due_date)})`:'—';
+    document.getElementById('rp-next').textContent=`KES ${fmt(summary.outstanding||0,0)}`;
     document.getElementById('rp-info').style.display='block';
-    if(next)document.getElementById('rp-amount').value=Math.round(next.repayment);
+    document.getElementById('rp-amount').value=Math.round(summary.outstanding||0) || '';
   }catch(e){}
 }
 

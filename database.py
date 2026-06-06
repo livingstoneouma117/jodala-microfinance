@@ -54,7 +54,6 @@ def init_db():
         national_id   TEXT UNIQUE NOT NULL,
         gender        TEXT,
         dob           TEXT,
-        address       TEXT,
         region        TEXT,
         status        TEXT NOT NULL DEFAULT 'active',
         joined_date   TEXT NOT NULL,
@@ -345,7 +344,7 @@ def _seed_data(conn):
         ("M007","Ruth Wambua",    "0778901234","ruth@email.com",   "78901234","F","1987-12-05","Thika",  "active",  "2023-07-10",78000,1),
     ]
     c.executemany(
-        "INSERT INTO members (id,name,phone,email,national_id,gender,dob,address,status,joined_date,savings,created_by,member_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO members (id,name,phone,email,national_id,gender,dob,region,status,joined_date,savings,created_by,member_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [m + ("member",) for m in members],
     )
 
@@ -353,7 +352,6 @@ def _seed_data(conn):
         ("sacco_name", "SACCOFinance Chama"),
         ("logo_text", "SF"),
         ("logo_url", ""),
-        ("address", "Nairobi, Kenya"),
         ("phone", "0712345678"),
         ("account_opening_balance", "0"),
         ("default_penalty_rate", "5"),
@@ -590,6 +588,16 @@ def _migrate_schema(c):
         c.execute("ALTER TABLE members ADD COLUMN member_type TEXT NOT NULL DEFAULT 'member'")
     if "region" not in member_cols:
         c.execute("ALTER TABLE members ADD COLUMN region TEXT")
+    if "address" in member_cols:
+        c.execute("UPDATE members SET region=COALESCE(NULLIF(TRIM(region),''), NULLIF(TRIM(address),''), 'Unknown') WHERE region IS NULL OR TRIM(region)=''")
+        try:
+            c.execute("ALTER TABLE members DROP COLUMN address")
+        except sqlite3.OperationalError:
+            pass
+    for member_id, region in c.execute("SELECT id, region FROM members WHERE region IS NOT NULL AND TRIM(region)<>''").fetchall():
+        normalized = region.strip().title()
+        if normalized and normalized != region:
+            c.execute("UPDATE members SET region=? WHERE id=?", (normalized, member_id))
 
     loan_cols = {row[1] for row in c.execute("PRAGMA table_info(loans)").fetchall()}
     if loan_cols and "penalties" not in loan_cols:
@@ -664,7 +672,6 @@ def _migrate_schema(c):
         ("sacco_name", "SACCOFinance Chama"),
         ("logo_text", "SF"),
         ("logo_url", ""),
-        ("address", "Nairobi, Kenya"),
         ("phone", "0712345678"),
         ("account_opening_balance", "0"),
         ("default_penalty_rate", "5"),

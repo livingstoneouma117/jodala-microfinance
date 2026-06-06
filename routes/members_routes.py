@@ -5,6 +5,11 @@ from services.common import *
 members_bp = Blueprint("members", __name__)
 bp = members_bp
 
+
+def _normalize_region(value):
+    text = (value or "").strip()
+    return text.title() if text else None
+
 @bp.route("/api/members", methods=["GET"])
 @login_required
 def get_members():
@@ -76,11 +81,11 @@ def create_member():
     db  = get_db()
     try:
         db.execute(
-            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,address,region,status,joined_date,savings,created_by,member_type)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,region,status,joined_date,savings,created_by,member_type)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (mid, d["name"], d.get("phone"), d.get("email"), national_id,
-             d.get("gender"), d.get("dob"), d.get("address"), d.get("region"), d.get("status","active"),
-             d["joined_date"], 0, g.user["sub"], member_type)
+                d.get("gender"), d.get("dob"), _normalize_region(d.get("region")), d.get("status","active"),
+                d["joined_date"], 0, g.user["sub"], member_type)
         )
         db.execute("INSERT INTO savings_accounts (member_id,balance) VALUES (?,?)", (mid, 0))
         db.commit()
@@ -103,10 +108,10 @@ def update_member(member_id):
     db.execute(
         """UPDATE members SET name=COALESCE(?,name), phone=COALESCE(?,phone),
            email=COALESCE(?,email), gender=COALESCE(?,gender), dob=COALESCE(?,dob),
-           address=COALESCE(?,address), region=COALESCE(?,region), status=COALESCE(?,status)
+           region=COALESCE(?,region), status=COALESCE(?,status)
            WHERE id=?""",
         (d.get("name"), d.get("phone"), d.get("email"), d.get("gender"),
-         d.get("dob"), d.get("address"), d.get("region"), d.get("status"), member_id)
+         d.get("dob"), _normalize_region(d.get("region")), d.get("status"), member_id)
     )
     db.commit()
     member = row_to_dict(db.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone())
@@ -197,10 +202,10 @@ def create_borrower():
     db = get_db()
     try:
         db.execute(
-            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,address,region,status,joined_date,savings,created_by,member_type)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO members (id,name,phone,email,national_id,gender,dob,region,status,joined_date,savings,created_by,member_type)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (bid, d["name"], d.get("phone"), d.get("email"), national_id,
-             d.get("gender"), d.get("dob"), d.get("address"), d.get("region"), d.get("status","active"),
+             d.get("gender"), d.get("dob"), _normalize_region(d.get("region")), d.get("status","active"),
              d["joined_date"], 0, g.user["sub"], "borrower")
         )
         db.execute("INSERT INTO savings_accounts (member_id,balance) VALUES (?,?)", (bid, 0))

@@ -626,7 +626,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Borrower</th><th>Phone</th><th>Address</th><th>Region</th><th>Status</th><th>Registered</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Borrower</th><th>Phone</th><th>Region</th><th>Status</th><th>Registered</th><th>Actions</th></tr></thead>
             <tbody id="borrowers-tbody"></tbody>
           </table>
         </div>
@@ -915,7 +915,6 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
               <div class="form-hint">No penalty is charged until a schedule is overdue beyond this number of days.</div>
             </div>
           </div>
-          <div class="form-group mt3"><label class="form-label">Address</label><input id="set-address" class="form-input" placeholder="Physical address"/></div>
           <div class="modal-footer" style="padding-left:0;padding-right:0;margin-top:16px">
             <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
           </div>
@@ -975,7 +974,6 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
           <select id="m-status" class="form-select"><option value="active">Active</option><option value="suspended">Suspended</option><option value="blacklisted">Blacklisted</option></select>
         </div>
       </div>
-       <div class="form-group mt3"><label class="form-label">Address</label><input id="m-address" class="form-input" placeholder="Physical address"/></div>
        <div class="form-group mt3"><label class="form-label">Region</label><input id="m-region" class="form-input" placeholder="Central / Coast / Rift Valley"/></div>
        <input id="m-email" type="hidden"/><input id="m-nid" type="hidden"/><input id="m-gender" type="hidden"/><input id="m-dob" type="hidden"/><input id="m-joined" type="hidden"/>
     </div>
@@ -1783,7 +1781,7 @@ function openMemberModal(){
   document.getElementById('member-edit-id').value='';
   document.getElementById('member-type').value='member';
   document.getElementById('member-modal-title').textContent='Register New Member';
-   ['m-name','m-phone','m-email','m-nid','m-address','m-region'].forEach(id=>document.getElementById(id).value='');
+   ['m-name','m-phone','m-email','m-nid','m-region'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('m-gender').value='';
   document.getElementById('m-dob').value='';
   document.getElementById('m-joined').value=today();
@@ -1809,7 +1807,6 @@ function editMember(m){
   document.getElementById('m-dob').value=m.dob||'';
   document.getElementById('m-joined').value=m.joined_date||today();
   document.getElementById('m-status').value=m.status||'active';
-  document.getElementById('m-address').value=m.address||'';
   document.getElementById('m-region').value=m.region||'';
   openModal('member-modal');
 }
@@ -1820,7 +1817,7 @@ async function saveMember(){
     email:document.getElementById('m-email').value,national_id:document.getElementById('m-nid').value,
     gender:document.getElementById('m-gender').value,dob:document.getElementById('m-dob').value,
     joined_date:document.getElementById('m-joined').value,status:document.getElementById('m-status').value,
-    address:document.getElementById('m-address').value,region:document.getElementById('m-region').value,member_type:document.getElementById('member-type').value};
+    region:document.getElementById('m-region').value,member_type:document.getElementById('member-type').value};
   if(!data.name){toast('Name is required','error');return}
   if(!data.joined_date)data.joined_date=today();
   try{
@@ -1860,7 +1857,7 @@ async function viewMember(id){
       <div class="grid2 gap3 mb4">
         ${[['Name',m.name],['Phone',m.phone||'—'],['Email',m.email||'—'],['National ID',m.national_id],
           ['Gender',m.gender||'—'],['DOB',fmtSafeD(m.dob)],['Joined',fmtSafeD(m.joined_date)],['Status',badge(m.status)],
-          ['Savings Balance','<span class="text-green font-bold">KES '+fmt(m.savings)+'</span>'],['Address',m.address||'—']
+          ['Savings Balance','<span class="text-green font-bold">KES '+fmt(m.savings)+'</span>'],['Region',m.region||'—']
         ].map(([k,v])=>`<div class="surface2"><div class="text-xs text-muted mb1">${k}</div><div>${v}</div></div>`).join('')}
       </div>
       <div class="font-bold mb3">Activity Timeline (${timeline.length})</div>
@@ -1902,7 +1899,6 @@ async function loadBorrowers(){
       <tr>
         <td><div class="flex items-center gap3"><div class="avatar" style="width:32px;height:32px;font-size:11px">${b.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div><div><div class="font-bold">${b.name}</div><div class="text-xs text-muted">${b.id}</div></div></div></td>
         <td>${b.phone||'—'}</td>
-        <td class="text-muted">${b.address||'—'}</td>
         <td class="text-muted">${b.region||'—'}</td>
         <td>${badge(b.status)}</td>
         <td class="text-muted">${fmtSafeD(b.joined_date)}</td>
@@ -3027,7 +3023,6 @@ async function loadSettings(){
     if(document.getElementById('set-name')){
       document.getElementById('set-name').value=appSettings.sacco_name||'';
       document.getElementById('set-logo-text').value=appSettings.logo_text||'';
-      document.getElementById('set-address').value=appSettings.address||'';
       document.getElementById('set-phone').value=appSettings.phone||'';
       document.getElementById('set-opening-balance').value=appSettings.account_opening_balance||'0';
       const penaltyRateInput=document.getElementById('set-default-penalty-rate');
@@ -3097,7 +3092,6 @@ async function saveSettings(){
     logo_text:document.getElementById('set-logo-text').value,
     logo_image:pendingLogoImage||'',
     logo_url:'',
-    address:document.getElementById('set-address').value,
     phone:document.getElementById('set-phone').value,
     account_opening_balance:document.getElementById('set-opening-balance').value||'0',
     default_penalty_rate:document.getElementById('set-default-penalty-rate')?.value||'5',

@@ -337,7 +337,8 @@ def create_loan():
         new_status = topup_loan["status"]
         db.execute(
             """UPDATE loans
-               SET amount=?, applied_date=?, disbursed_date=?, officer_id=?
+               SET amount=?, applied_date=?, disbursed_date=?, officer_id=?,
+                   restructure_snapshot_outstanding=NULL, restructure_snapshot_paid=NULL
                WHERE id=?""",
             (new_amount,
              borrowed_date, borrowed_date if topup_loan["status"] in ("active", "overdue") else topup_loan.get("disbursed_date"),

@@ -326,13 +326,8 @@ def create_loan():
         if added_amount <= 0:
             db.close(); return error("Top-up amount must be greater than zero")
 
-        total_repayable = float(db.execute(
-            "SELECT COALESCE(SUM(repayment),0) FROM loan_schedule WHERE loan_id=?",
-            (topup_loan["id"],)
-        ).fetchone()[0] or 0)
-        total_paid = float(topup_loan.get("total_paid") or 0)
-        old_outstanding = max(0.0, total_repayable - total_paid)
-        new_amount = old_outstanding + added_amount
+        base_amount = float(topup_loan.get("amount") or 0)
+        new_amount = base_amount + added_amount
         new_status = topup_loan["status"]
         db.execute(
             """UPDATE loans

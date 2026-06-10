@@ -316,8 +316,9 @@ def create_loan():
 
     topup_loan = row_to_dict(db.execute(
         """SELECT * FROM loans
-           WHERE member_id=? AND status IN ('pending','active','overdue')
-           ORDER BY created_at ASC LIMIT 1""",
+           WHERE member_id=? AND status IN ('active','overdue')
+           ORDER BY COALESCE(disbursed_date, applied_date, created_at) DESC, created_at DESC
+           LIMIT 1""",
         (d["member_id"],)
     ).fetchone())
 

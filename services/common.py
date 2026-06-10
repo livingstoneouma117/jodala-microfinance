@@ -778,7 +778,7 @@ def get_loan_statement_data(loan_id):
     refresh_loan_statuses(db)
     db.commit()
     loan = row_to_dict(db.execute(
-        """SELECT l.*, m.name as member_name, m.phone as member_phone, m.address as member_address, m.member_type
+        """SELECT l.*, m.name as member_name, m.phone as member_phone, COALESCE(m.region, '') as member_address, m.member_type
            FROM loans l JOIN members m ON l.member_id=m.id WHERE l.id=?""", (loan_id,)
     ).fetchone())
     if not loan:

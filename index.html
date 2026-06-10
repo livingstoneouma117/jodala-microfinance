@@ -1056,7 +1056,7 @@ svg.donut circle.segment{fill:none;stroke-width:14;transition:stroke-dasharray .
       <div class="surface2 mb4" id="lr-current-summary">Loading loan details...</div>
       <div class="grid2 gap4">
         <div class="form-group"><label class="form-label">New Term (Months) <span class="req">*</span></label><input id="lr-term" type="number" min="1" class="form-input"/></div>
-        <div class="form-group"><label class="form-label">Monthly Rate %</label><input id="lr-rate" type="number" min="0" step="0.01" class="form-input"/></div>
+        <div class="form-group"><label class="form-label">Monthly Rate % (reset to 0%)</label><input id="lr-rate" type="number" min="0" step="0.01" class="form-input" readonly/></div>
         <div class="form-group"><label class="form-label">Interest Method</label><select id="lr-method" class="form-select"><option value="reducing">Reducing Balance</option><option value="flat">Flat Rate</option></select></div>
         <div class="form-group"><label class="form-label">Effective Date</label><input id="lr-date" type="date" class="form-input"/></div>
       </div>
@@ -2268,7 +2268,7 @@ async function openRestructureLoan(id){
     const s=res.data.summary||{};
     document.getElementById('lr-loan-id').value=id;
     document.getElementById('lr-term').value=l.term_months||1;
-    document.getElementById('lr-rate').value=l.annual_rate||0;
+    document.getElementById('lr-rate').value=0;
     document.getElementById('lr-method').value=l.method||'reducing';
     document.getElementById('lr-date').value=today();
     document.getElementById('lr-notes').value='';

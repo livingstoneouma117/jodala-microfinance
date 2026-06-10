@@ -326,7 +326,13 @@ def create_loan():
         if added_amount <= 0:
             db.close(); return error("Top-up amount must be greater than zero")
 
-        new_amount = float(topup_loan["amount"]) + added_amount
+        total_repayable = float(db.execute(
+            "SELECT COALESCE(SUM(repayment),0) FROM loan_schedule WHERE loan_id=?",
+            (topup_loan["id"],)
+        ).fetchone()[0] or 0)
+        total_paid = float(topup_loan.get("total_paid") or 0)
+        old_outstanding = max(0.0, total_repayable - total_paid)
+        new_amount = old_outstanding + added_amount
         new_status = topup_loan["status"]
         db.execute(
             """UPDATE loans
@@ -340,6 +346,7 @@ def create_loan():
              g.user["sub"], topup_loan["id"])
         )
         loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (topup_loan["id"],)).fetchone())
+        loan["amount"] = new_amount
 
         if loan["status"] in ("active", "overdue"):
             start_date = borrowed_date
@@ -352,6 +359,7 @@ def create_loan():
                 new_status = "completed"
             db.execute("UPDATE loans SET status=? WHERE id=?", (new_status, loan["id"]))
             loan = row_to_dict(db.execute("SELECT * FROM loans WHERE id=?", (loan["id"],)).fetchone())
+            loan["amount"] = new_amount
             # Top-up on an active/overdue loan represents new funds released.
             adjust_account_opening_balance(db, -added_amount)
 

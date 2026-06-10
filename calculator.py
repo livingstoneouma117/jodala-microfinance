@@ -116,7 +116,7 @@ def loan_summary(loan: dict, schedule: list[dict]) -> dict:
     if snapshot_outstanding is not None and snapshot_paid is not None:
         outstanding = 0.0 if is_written_off else max(0, float(snapshot_outstanding or 0) - (total_paid - float(snapshot_paid or 0)))
     else:
-        outstanding = 0.0 if is_written_off else max(0, total_repayable - total_paid)
+        outstanding = 0.0 if is_written_off else max(0, base_repayable - total_paid)
 
     return {
         "base_repayable": round(base_repayable, 2),

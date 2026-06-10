@@ -160,7 +160,7 @@ def get_loans():
                 WHEN l.status='written_off' THEN 0
                 WHEN l.restructure_snapshot_outstanding IS NOT NULL AND l.restructure_snapshot_paid IS NOT NULL
                     THEN MAX(l.restructure_snapshot_outstanding - (l.total_paid - COALESCE(l.restructure_snapshot_paid, 0)), 0)
-                ELSE MAX(COALESCE(risk.total_repayable, l.amount) + COALESCE(l.penalties,0) - l.total_paid, 0)
+                ELSE MAX(COALESCE(risk.total_repayable, l.amount) - l.total_paid, 0)
             END as outstanding
             FROM loans l
             JOIN members m ON l.member_id=m.id

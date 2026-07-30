@@ -240,6 +240,8 @@ function routePermissionForPath(path, method = "GET") {
   if (safePath.startsWith("/api/loans/") && safePath.endsWith("/disburse")) return "loans.disburse";
   if (safePath.startsWith("/api/loans/") && safePath.endsWith("/reject")) return "loans.reject";
   if (safePath.startsWith("/api/loans/") && (safePath.endsWith("/statement.pdf") || safePath.endsWith("/statement"))) return "loans.export";
+  if (safePath.startsWith("/api/loans/") && (safePath.includes("/guarantors") || safePath.endsWith("/restructure"))) return "loans.edit";
+  if (safePath.startsWith("/api/savings/") && safePath.includes("/passbook")) return "savings.export";
   if (safePath.startsWith("/api/expenses/accounts/") && safePath.endsWith("/status")) return "expenses.edit";
   if (safePath.startsWith("/api/notifications/read-all")) return "notifications.edit";
   if (safePath.startsWith("/api/notifications/") && safePath.endsWith("/read")) return "notifications.edit";

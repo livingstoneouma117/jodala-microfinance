@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch, apiFetchBlob } from "../../lib/api";
 import { formatDate, formatKES, statusClass } from "../../lib/format";
+import { canAccess } from "../../lib/access";
 import DataTable from "../ui/DataTable";
 import Modal from "../ui/Modal";
 import { useToast } from "../ui/Toast";
@@ -18,7 +19,7 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function LoanDetails({ loanId, onChanged }) {
+function LoanDetails({ loanId, onChanged, user }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [payload, setPayload] = useState(null);
@@ -67,7 +68,8 @@ function LoanDetails({ loanId, onChanged }) {
   const summary = payload.summary || {};
   const schedule = payload.schedule || [];
   const guarantors = payload.guarantors || [];
-  const canRestructure = ["active", "overdue"].includes(String(loan.status || "").toLowerCase());
+  const canEditLoans = canAccess(user, ["admin", "officer"], ["loans.edit"]);
+  const canRestructure = canEditLoans && ["active", "overdue"].includes(String(loan.status || "").toLowerCase());
 
   async function addGuarantor(event) {
     event.preventDefault();
@@ -146,7 +148,7 @@ function LoanDetails({ loanId, onChanged }) {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Guarantor</th><th>Phone</th><th>Guaranteed</th><th>Savings</th><th></th></tr></thead>
+            <thead><tr><th>Guarantor</th><th>Phone</th><th>Guaranteed</th><th>Savings</th>{canEditLoans ? <th></th> : null}</tr></thead>
             <tbody>
               {guarantors.map((row) => (
                 <tr key={row.id}>
@@ -154,24 +156,26 @@ function LoanDetails({ loanId, onChanged }) {
                   <td>{row.guarantor_phone || "-"}</td>
                   <td>{formatKES(row.amount)}</td>
                   <td>{formatKES(row.guarantor_savings)}</td>
-                  <td><button type="button" className="ghost-btn" disabled={saving} onClick={() => removeGuarantor(row)}>Remove</button></td>
+                  {canEditLoans ? <td><button type="button" className="ghost-btn" disabled={saving} onClick={() => removeGuarantor(row)}>Remove</button></td> : null}
                 </tr>
               ))}
-              {guarantors.length === 0 ? <tr><td colSpan={5} className="table-empty">No guarantors attached.</td></tr> : null}
+              {guarantors.length === 0 ? <tr><td colSpan={canEditLoans ? 5 : 4} className="table-empty">No guarantors attached.</td></tr> : null}
             </tbody>
           </table>
         </div>
-        <form className="row-form" onSubmit={addGuarantor}>
-          <select value={guarantorForm.guarantor_id} onChange={(event) => setGuarantorForm((prev) => ({ ...prev, guarantor_id: event.target.value }))} required>
-            <option value="">Select guarantor</option>
-            {members.filter((member) => member.id !== loan.member_id).map((member) => (
-              <option key={member.id} value={member.id}>{member.name} ({member.id})</option>
-            ))}
-          </select>
-          <input type="number" min="0" placeholder="Guaranteed amount" value={guarantorForm.amount} onChange={(event) => setGuarantorForm((prev) => ({ ...prev, amount: event.target.value }))} />
-          <input type="text" placeholder="Notes" value={guarantorForm.notes} onChange={(event) => setGuarantorForm((prev) => ({ ...prev, notes: event.target.value }))} />
-          <button type="submit" className="primary-btn" disabled={saving}>Add Guarantor</button>
-        </form>
+        {canEditLoans ? (
+          <form className="row-form" onSubmit={addGuarantor}>
+            <select value={guarantorForm.guarantor_id} onChange={(event) => setGuarantorForm((prev) => ({ ...prev, guarantor_id: event.target.value }))} required>
+              <option value="">Select guarantor</option>
+              {members.filter((member) => member.id !== loan.member_id).map((member) => (
+                <option key={member.id} value={member.id}>{member.name} ({member.id})</option>
+              ))}
+            </select>
+            <input type="number" min="0" placeholder="Guaranteed amount" value={guarantorForm.amount} onChange={(event) => setGuarantorForm((prev) => ({ ...prev, amount: event.target.value }))} />
+            <input type="text" placeholder="Notes" value={guarantorForm.notes} onChange={(event) => setGuarantorForm((prev) => ({ ...prev, notes: event.target.value }))} />
+            <button type="submit" className="primary-btn" disabled={saving}>Add Guarantor</button>
+          </form>
+        ) : null}
       </section>
 
       <section className="surface-card stack">
@@ -179,7 +183,7 @@ function LoanDetails({ loanId, onChanged }) {
           <h4>Loan Restructuring</h4>
           <span className="muted">Extend term or adjust rate on active loans.</span>
         </div>
-        {!canRestructure ? <p className="muted">Only active or overdue loans can be restructured.</p> : (
+        {!canEditLoans ? <p className="muted">Grant Loans - Edit to allow this user to manage guarantors and restructure loans.</p> : !canRestructure ? <p className="muted">Only active or overdue loans can be restructured.</p> : (
           <form className="stack" onSubmit={restructureLoan}>
             <div className="two-col">
               <label>New Term (months)<input type="number" min="1" value={restructureForm.term_months} onChange={(event) => setRestructureForm((prev) => ({ ...prev, term_months: event.target.value }))} required /></label>
@@ -217,7 +221,7 @@ function LoanDetails({ loanId, onChanged }) {
   );
 }
 
-function LoanList({ refreshToken }) {
+function LoanList({ refreshToken, user }) {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -228,6 +232,7 @@ function LoanList({ refreshToken }) {
   const [selectedLoanId, setSelectedLoanId] = useState("");
   const [localRefresh, setLocalRefresh] = useState(0);
   const pushToast = useToast();
+  const canExportLoans = canAccess(user, ["admin", "officer", "accountant"], ["loans.export"]);
 
   useEffect(() => {
     let mounted = true;
@@ -275,11 +280,11 @@ function LoanList({ refreshToken }) {
       render: (row) => (
         <div className="table-actions">
           <button type="button" className="ghost-btn" onClick={() => setSelectedLoanId(row.id)}>View</button>
-          <button type="button" className="ghost-btn" onClick={() => downloadStatement(row)}>Download Statement</button>
+          {canExportLoans ? <button type="button" className="ghost-btn" onClick={() => downloadStatement(row)}>Download Statement</button> : null}
         </div>
       ),
     },
-  ], []);
+  ], [canExportLoans]);
 
   return (
     <section className="panel stack">
@@ -293,7 +298,7 @@ function LoanList({ refreshToken }) {
       {error ? <p className="error-box">{error}</p> : null}
       <DataTable columns={columns} rows={rows} rowKey="id" loading={loading} page={page} pages={pages} onPageChange={setPage} emptyMessage="No loans found for this filter." />
       <Modal open={Boolean(selectedLoanId)} title={`Loan Details ${selectedLoanId}`} onClose={() => setSelectedLoanId("")} maxWidth="1040px">
-        {selectedLoanId ? <LoanDetails loanId={selectedLoanId} onChanged={() => setLocalRefresh((prev) => prev + 1)} /> : null}
+        {selectedLoanId ? <LoanDetails loanId={selectedLoanId} user={user} onChanged={() => setLocalRefresh((prev) => prev + 1)} /> : null}
       </Modal>
     </section>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../lib/api";
-import { AVAILABLE_PERMISSIONS, ROLE_PERMISSIONS, ROLES, permissionLabel, roleLabel } from "../lib/access";
+import { AVAILABLE_PERMISSION_GROUPS, ROLE_PERMISSIONS, ROLES, permissionLabel, roleLabel } from "../lib/access";
 import { formatDate } from "../lib/format";
 import DataTable from "../components/ui/DataTable";
 import Modal from "../components/ui/Modal";
@@ -178,7 +178,7 @@ function UserRolesPage() {
     <div className="stack">
       <header className="page-head">
         <h2>Users & Roles</h2>
-        <p>Admins can assign a base role and add extra capabilities on top of it.</p>
+        <p>Admins can assign a base role, then grant exact extra actions without making a user full admin.</p>
       </header>
 
       <section className="panel stack">
@@ -203,13 +203,18 @@ function UserRolesPage() {
       <section className="panel stack">
         <div className="row-between">
           <h3>Permission Catalog</h3>
-          <span className="muted">Use these permissions to extend a user beyond their role.</span>
+          <span className="muted">Examples: let an officer manage loan products, approve loans, export reports, or edit expenses.</span>
         </div>
-        <div className="permission-grid">
-          {AVAILABLE_PERMISSIONS.map((permission) => (
-            <article className="permission-card" key={permission.value}>
-              <strong>{permission.label}</strong>
-              <p>{permission.description}</p>
+        <div className="permission-group-grid">
+          {AVAILABLE_PERMISSION_GROUPS.map((group) => (
+            <article className="permission-card" key={group.module}>
+              <strong>{group.label}</strong>
+              <p>{group.description}</p>
+              <div className="permission-chip-row">
+                {group.permissions.map((permission) => (
+                  <span key={permission.value} className="permission-chip">{permission.label}</span>
+                ))}
+              </div>
             </article>
           ))}
         </div>
@@ -268,25 +273,36 @@ function UserRolesPage() {
               <h4>Extra Permissions</h4>
               <span className="muted">Checked items add access beyond the selected role.</span>
             </div>
-            <div className="permission-grid">
-              {AVAILABLE_PERMISSIONS.map((permission) => {
-                const checked = draftAccess.permissions.includes(permission.value);
-                return (
-                  <label className="permission-select" key={permission.value}>
-                    <span className="checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => togglePermission(permission.value)}
-                      />
-                      <span>
-                        <strong>{permission.label}</strong>
-                        <small>{permission.description}</small>
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
+            <div className="permission-group-grid permission-editor-grid">
+              {AVAILABLE_PERMISSION_GROUPS.map((group) => (
+                <article className="permission-select-group" key={group.module}>
+                  <div className="row-between">
+                    <strong>{group.label}</strong>
+                    <span className="muted-inline">{group.permissions.length} options</span>
+                  </div>
+                  <p>{group.description}</p>
+                  <div className="permission-option-list">
+                    {group.permissions.map((permission) => {
+                      const checked = draftAccess.permissions.includes(permission.value);
+                      return (
+                        <label className="permission-select compact" key={permission.value}>
+                          <span className="checkbox-row">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => togglePermission(permission.value)}
+                            />
+                            <span>
+                              <strong>{permission.label}</strong>
+                              <small>{permission.description}</small>
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
 

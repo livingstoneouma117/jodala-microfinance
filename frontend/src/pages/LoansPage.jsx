@@ -4,11 +4,15 @@ import LoanList from "../components/loans/LoanList";
 import LoanProducts from "../components/loans/LoanProducts";
 import Modal from "../components/ui/Modal";
 import { useToast } from "../components/ui/Toast";
+import { canAccess } from "../lib/access";
 
-function LoansPage() {
+function LoansPage({ session }) {
   const [refreshToken, setRefreshToken] = useState(0);
   const [openLoanForm, setOpenLoanForm] = useState(false);
   const pushToast = useToast();
+  const user = session?.user;
+  const canCreateLoan = canAccess(user, ["admin", "officer"], ["loans.create"]);
+  const canViewLoanProducts = canAccess(user, ["admin"], ["loan-products"]);
 
   return (
     <div className="stack">
@@ -17,14 +21,16 @@ function LoansPage() {
           <h2>Loan Workspace</h2>
           <p>Loan list now uses shared DataTable + LoanDetails modal.</p>
         </header>
-        <button type="button" className="primary-btn" onClick={() => setOpenLoanForm(true)}>
-          New Loan Application
-        </button>
+        {canCreateLoan ? (
+          <button type="button" className="primary-btn" onClick={() => setOpenLoanForm(true)}>
+            New Loan Application
+          </button>
+        ) : null}
       </div>
 
-      <LoanProducts />
+      {canViewLoanProducts ? <LoanProducts user={user} /> : null}
 
-      <LoanList refreshToken={refreshToken} />
+      <LoanList refreshToken={refreshToken} user={user} />
 
       <Modal open={openLoanForm} title="Create Loan Application" onClose={() => setOpenLoanForm(false)} maxWidth="760px">
         <LoanForm

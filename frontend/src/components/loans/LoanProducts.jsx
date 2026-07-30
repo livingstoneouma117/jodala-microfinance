@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../lib/api";
 import { formatKES } from "../../lib/format";
+import { canAccess } from "../../lib/access";
 import DataTable from "../ui/DataTable";
 import Modal from "../ui/Modal";
 import { useToast } from "../ui/Toast";
@@ -17,7 +18,7 @@ const EMPTY_PRODUCT = {
   active: true,
 };
 
-function LoanProducts() {
+function LoanProducts({ user }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -26,6 +27,8 @@ function LoanProducts() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const pushToast = useToast();
+  const canCreate = canAccess(user, ["admin"], ["loan-products.create"]);
+  const canEdit = canAccess(user, ["admin"], ["loan-products.edit"]);
 
   async function loadProducts() {
     setLoading(true);
@@ -100,26 +103,31 @@ function LoanProducts() {
     }
   }
 
-  const columns = useMemo(() => [
-    { key: "name", label: "Product", render: (row) => <><strong>{row.name}</strong><p className="muted-inline">{row.method}</p></> },
-    { key: "amount", label: "Amount Range", render: (row) => `${formatKES(row.min_amount)} - ${formatKES(row.max_amount)}` },
-    { key: "term", label: "Term", render: (row) => `${row.min_term}-${row.max_term} months` },
-    { key: "annual_rate", label: "Rate", render: (row) => `${Number(row.annual_rate || 0).toFixed(2)}%` },
-    { key: "penalty_rate", label: "Penalty", render: (row) => `${Number(row.penalty_rate || 0).toFixed(2)}%` },
-    { key: "active", label: "Status", render: (row) => (row.active ? "Active" : "Inactive") },
-    {
-      key: "actions",
-      label: "Actions",
-      render: (row) => (
-        <div className="table-actions">
-          <button type="button" className="ghost-btn" onClick={() => openEditor(row)}>Edit</button>
-          <button type="button" className="ghost-btn" onClick={() => toggleStatus(row)}>
-            {row.active ? "Deactivate" : "Activate"}
-          </button>
-        </div>
-      ),
-    },
-  ], []);
+  const columns = useMemo(() => {
+    const base = [
+      { key: "name", label: "Product", render: (row) => <><strong>{row.name}</strong><p className="muted-inline">{row.method}</p></> },
+      { key: "amount", label: "Amount Range", render: (row) => `${formatKES(row.min_amount)} - ${formatKES(row.max_amount)}` },
+      { key: "term", label: "Term", render: (row) => `${row.min_term}-${row.max_term} months` },
+      { key: "annual_rate", label: "Rate", render: (row) => `${Number(row.annual_rate || 0).toFixed(2)}%` },
+      { key: "penalty_rate", label: "Penalty", render: (row) => `${Number(row.penalty_rate || 0).toFixed(2)}%` },
+      { key: "active", label: "Status", render: (row) => (row.active ? "Active" : "Inactive") },
+    ];
+    if (canEdit) {
+      base.push({
+        key: "actions",
+        label: "Actions",
+        render: (row) => (
+          <div className="table-actions">
+            <button type="button" className="ghost-btn" onClick={() => openEditor(row)}>Edit</button>
+            <button type="button" className="ghost-btn" onClick={() => toggleStatus(row)}>
+              {row.active ? "Deactivate" : "Activate"}
+            </button>
+          </div>
+        ),
+      });
+    }
+    return base;
+  }, [canEdit]);
 
   return (
     <section className="panel stack">
@@ -128,7 +136,7 @@ function LoanProducts() {
           <h3>Loan Products</h3>
           <p className="muted">Create, edit, and deactivate the product types officers use on applications.</p>
         </div>
-        <button type="button" className="primary-btn" onClick={() => openEditor()}>New Product</button>
+        {canCreate ? <button type="button" className="primary-btn" onClick={() => openEditor()}>New Product</button> : null}
       </div>
 
       {error ? <p className="error-box">{error}</p> : null}

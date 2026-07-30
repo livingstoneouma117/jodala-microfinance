@@ -104,3 +104,62 @@ def test_admin_can_assign_roles_and_non_admin_cannot(client):
         headers={"Authorization": f"Bearer {officer_token}"},
     )
     assert denied.status_code == 403
+
+
+def test_admin_granted_permission_allows_officer_to_do_admin_only_action(client):
+    admin_token = _login(client)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    users = client.get("/api/users", headers=admin_headers).get_json()["data"]
+    officer = next(user for user in users if user["username"] == "officer")
+
+    denied_token = _login(client, "cashier", "cashier123")
+    denied = client.post(
+        "/api/loan-products",
+        json={
+            "name": "Cashier Blocked Product",
+            "min_amount": 1000,
+            "max_amount": 5000,
+            "min_term": 1,
+            "max_term": 3,
+            "annual_rate": 0,
+            "method": "flat",
+            "penalty_rate": 0,
+            "active": True,
+        },
+        headers={"Authorization": f"Bearer {denied_token}"},
+    )
+    assert denied.status_code == 403
+
+    grant = client.put(
+        f"/api/users/{officer['id']}",
+        json={
+            "name": officer["name"],
+            "username": officer["username"],
+            "email": officer["email"],
+            "role": officer["role"],
+            "active": True,
+            "permissions": ["loan-products.create"],
+        },
+        headers=admin_headers,
+    )
+    assert grant.status_code == 200
+
+    officer_token = _login(client, "officer", "officer123")
+    created = client.post(
+        "/api/loan-products",
+        json={
+            "name": "Officer Managed Product",
+            "min_amount": 1000,
+            "max_amount": 5000,
+            "min_term": 1,
+            "max_term": 3,
+            "annual_rate": 0,
+            "method": "flat",
+            "penalty_rate": 0,
+            "active": True,
+        },
+        headers={"Authorization": f"Bearer {officer_token}"},
+    )
+    assert created.status_code == 201
+    assert created.get_json()["data"]["name"] == "Officer Managed Product"

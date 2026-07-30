@@ -162,6 +162,10 @@ def route_permission_for_path(path: str, method: str | None = None) -> str | Non
         return "loans.reject"
     if safe_path.startswith("/api/loans/") and (safe_path.endswith("/statement.pdf") or safe_path.endswith("/statement")):
         return "loans.export"
+    if safe_path.startswith("/api/loans/") and ("/guarantors" in safe_path or safe_path.endswith("/restructure")):
+        return "loans.edit"
+    if safe_path.startswith("/api/savings/") and "/passbook" in safe_path:
+        return "savings.export"
     if safe_path.startswith("/api/expenses/accounts/") and safe_path.endswith("/status"):
         return "expenses.edit"
     if safe_path.startswith("/api/notifications/read-all"):

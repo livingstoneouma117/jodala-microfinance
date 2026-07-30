@@ -630,7 +630,10 @@ td {
   .card-grid,
   .card-grid.compact,
   .role-grid,
-  .access-panel {
+  .access-panel,
+  .permission-grid,
+  .permission-group-grid,
+  .permission-editor-grid {
     grid-template-columns: 1fr;
   }
 
@@ -762,14 +765,32 @@ td {
   font-weight: 700;
 }
 
-.permission-grid {
+.permission-grid,
+.permission-group-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
+.permission-editor-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.permission-chip-row,
+.permission-option-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.permission-option-list {
+  flex-direction: column;
+}
+
 .permission-card,
-.permission-select {
+.permission-select,
+.permission-select-group {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   padding: 12px;
@@ -777,13 +798,15 @@ td {
 }
 
 .permission-card strong,
-.permission-select strong {
+.permission-select strong,
+.permission-select-group > .row-between strong {
   display: block;
   margin-bottom: 4px;
 }
 
 .permission-card p,
-.permission-select small {
+.permission-select small,
+.permission-select-group p {
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.45;
@@ -791,6 +814,10 @@ td {
 
 .permission-select {
   cursor: pointer;
+}
+
+.permission-select.compact {
+  padding: 9px;
 }
 
 .permission-select input[type="checkbox"] {

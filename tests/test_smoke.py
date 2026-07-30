@@ -78,3 +78,29 @@ def test_overdue_penalties_are_applied_to_outstanding(client):
     payload = detail.get_json()["data"]
     assert float(payload["summary"]["penalties"]) == float(loan["penalties"])
     assert any(float(row.get("penalty") or 0) > 0 for row in payload["schedule"])
+
+
+def test_admin_can_assign_roles_and_non_admin_cannot(client):
+    admin_token = _login(client)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    users_response = client.get("/api/users", headers=admin_headers)
+    assert users_response.status_code == 200
+    users = users_response.get_json()["data"]
+    target = next(user for user in users if user["username"] == "cashier")
+
+    update = client.patch(
+        f"/api/users/{target['id']}/role",
+        json={"role": "officer"},
+        headers=admin_headers,
+    )
+    assert update.status_code == 200
+    assert update.get_json()["data"]["role"] == "officer"
+
+    officer_token = _login(client, "officer", "officer123")
+    denied = client.patch(
+        f"/api/users/{target['id']}/role",
+        json={"role": "cashier"},
+        headers={"Authorization": f"Bearer {officer_token}"},
+    )
+    assert denied.status_code == 403

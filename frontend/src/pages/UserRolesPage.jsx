@@ -92,6 +92,24 @@ function UserRolesPage() {
     }
   }
 
+  async function assignRole(user, role) {
+    if (!user || role === user.role) return;
+    setSavingId(user.id);
+    try {
+      const res = await apiFetch(`/api/users/${user.id}/role`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      });
+      const updated = res?.data || {};
+      setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, ...updated } : item)));
+      pushToast(`${user.name} is now ${roleLabel(role)}.`, "success");
+    } catch (err) {
+      pushToast(err.message || "Could not assign role", "error");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   const columns = useMemo(
     () => [
       {
@@ -107,7 +125,23 @@ function UserRolesPage() {
       {
         key: "role",
         label: "Role",
-        render: (row) => <span className={`role-pill role-${row.role}`}>{roleLabel(row.role)}</span>,
+        render: (row) => (
+          <div className="role-assigner">
+            <span className={`role-pill role-${row.role}`}>{roleLabel(row.role)}</span>
+            <select
+              aria-label={`Assign role for ${row.name}`}
+              value={row.role || "cashier"}
+              disabled={savingId === row.id}
+              onChange={(event) => assignRole(row, event.target.value)}
+            >
+              {ROLES.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ),
       },
       {
         key: "permissions",
@@ -137,7 +171,7 @@ function UserRolesPage() {
         ),
       },
     ],
-    []
+    [savingId]
   );
 
   return (
